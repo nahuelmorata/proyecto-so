@@ -3,6 +3,33 @@
 #include <string.h>
 #include <pwd.h>
 #include <unistd.h>
+#include <wait.h>
+
+void ejecutarFuncionEnPoceso(int pid, char dirps[], char *args[]){
+  if (pid==0) {
+    execvp(dirps,args);
+    printf("Error when executing process, try checking the arguments\n");
+  }else {
+    if(pid<0){
+    perror("Error al crear proceso");
+    return ;
+    }
+  }
+}
+
+void construirArgumentos(char entrada[], char *argumentosSalida[]){
+  const char separator[4] = " ";   
+  char * restoString= entrada;
+  char *stringSeparado;
+
+  int i=0;
+  while ((stringSeparado= strtok_r(restoString,separator,&restoString))!=0) {
+    argumentosSalida[i]=stringSeparado;
+    i++;
+  }
+  argumentosSalida[i]=NULL;
+
+}
 
 void getLastWordOfCwd( char * cwd, char last[]){
   int i=0;
@@ -59,26 +86,41 @@ void siguienteComando(){
  
 
 }
-int main(int argc, char *argv[])
+int main()
 {
 
- 
+
 
 
   int salir=0;
   int seguir=1;
+  char *palabras[100]; //palabras de max 100 caracteres, despues se cambia si se necesita
 
-  while (seguir) {
-  
+  int i=0; 
+  while (seguir && i<10) {
+    printf("iniciando consola %d\n",i); 
     siguienteComando();
     char salida[1024]="";
-    scanf("%s",salida);
+    scanf("%[^\n]s",salida);
     salir= strcmp(salida,"exit");
+    
     if(salir==0){
       break;
     }
-    
-  }
+    printf("%s\n",salida);
+       
+    construirArgumentos(salida,palabras);
+    int pid = fork();
+    if(pid>0){
+      wait(NULL);
+      exit(0);
+    } else{
+      ejecutarFuncionEnPoceso(pid,palabras[0],palabras);
+    }
+    printf("Esto va luego de ejecutarse el comando\n");
+    i++;
+    }
+
 
   return EXIT_SUCCESS;
 }
