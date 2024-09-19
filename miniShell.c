@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <pwd.h>
+#include <sys/wait.h>
+#include <time.h>
 #include <unistd.h>
 #include <wait.h>
 
@@ -11,7 +13,7 @@ void ejecutarFuncionEnPoceso(int pid, char dirps[], char *args[]){
     printf("Error when executing process, try checking the arguments\n");
   }else {
     if(pid<0){
-    perror("Error al crear proceso");
+    perror("Error creating proceso");
     return ;
     }
   }
@@ -77,49 +79,63 @@ void siguienteComando(){
     uid_t uid = getuid();
     struct passwd *pw = getpwuid(uid);
     if (pw == NULL) {
-        perror("Error al obtener el nombre del usuario");
+        perror("Error getting user's name");
         return ;
     }
 
 
- printf("[%s@%s %s]$ ",pw->pw_name,hostname,lastWord);
- 
+    printf("[%s@%s %s]$ ", pw->pw_name, hostname, lastWord);
+}
+
+void getHelp(){
+  printf("help muestra esta ayuda \n");
+  printf("mkdir [nombre_dir] crear un directorio \n");
+  printf("rmdir [nombre_dir] <- falta implementar pero elimina un directorio \n");
+  printf("touch [nombre_dir] crea un archivo \n");
+  printf("ls lista los contenidos del directorio actual \n");
+  printf("cat [nombre_archivo] muestra los contenidos de un archivo \n");
+  printf("chge_perms [nombre_archivo] cambia los permisos de un archivo,\n los permisos son -r para no poder leer +r para leer,\n -w para quitar permisos de escritura +w para dar permisos de escritura\n y -x para quitar permisos de ejecucion y +x para dar permisos de ejecucion\n");
+  printf("exit para salir de la consola\n");
 
 }
-int main()
-{
 
-
-
-
+int main() {
+//getHelp();
   int salir=0;
   int seguir=1;
   char *palabras[100]; //palabras de max 100 caracteres, despues se cambia si se necesita
-
-  int i=0; 
-  while (seguir && i<10) {
-    printf("iniciando consola %d\n",i); 
+  pid_t pid;
+  int i=0;
+  char salida[100];
+  printf("iniciando mini shell escriba help para conocer los comandos disponibles o exit para salir\n");
+  while (seguir){
     siguienteComando();
-    char salida[1024]="";
-    scanf("%[^\n]s",salida);
+    fgets(salida,100,stdin);
+    fflush(stdin);
+
+    strtok(salida,"\n");
     salir= strcmp(salida,"exit");
     
     if(salir==0){
       break;
     }
-    printf("%s\n",salida);
-       
-    construirArgumentos(salida,palabras);
-    int pid = fork();
-    if(pid>0){
-      wait(NULL);
-      exit(0);
-    } else{
-      ejecutarFuncionEnPoceso(pid,palabras[0],palabras);
+
+    int ayuda = strcmp(salida, "help");
+    if(ayuda==0){
+      getHelp();
     }
-    printf("Esto va luego de ejecutarse el comando\n");
-    i++;
-    }
+
+    construirArgumentos(salida, palabras);
+    pid = fork();
+    if((int)pid<=0)
+      ejecutarFuncionEnPoceso(pid, palabras[0],palabras);
+    wait(NULL);
+
+      i++;
+
+
+  }
+
 
 
   return EXIT_SUCCESS;
