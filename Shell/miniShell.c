@@ -11,12 +11,22 @@ void ejecutarFuncionEnPoceso(int pid, char dirps[], char *args[]){
   if (pid==0) {
     execvp(dirps,args);
     printf("Error when executing process, try checking the arguments\n");
+    exit(1);
   }else {
     if(pid<0){
     perror("Error creating proceso");
-    return ;
+    exit(1);
     }
   }
+}
+
+char * encontrarRutaComando(char * entrada){
+
+  if(strcmp(entrada,"help")==0)
+    return NULL;
+  //Continuar
+
+  return NULL;
 }
 
 void construirArgumentos(char entrada[], char *argumentosSalida[]){
@@ -89,12 +99,19 @@ void siguienteComando(){
 
 void getHelp(){
   printf("help muestra esta ayuda \n");
-  printf("mkdir [nombre_dir] crear un directorio \n");
-  printf("rmdir [nombre_dir] <- falta implementar pero elimina un directorio \n");
-  printf("touch [nombre_dir] crea un archivo \n");
-  printf("ls lista los contenidos del directorio actual \n");
-  printf("cat [nombre_archivo] muestra los contenidos de un archivo \n");
-  printf("chge_perms [nombre_archivo] cambia los permisos de un archivo,\n los permisos son -r para no poder leer +r para leer,\n -w para quitar permisos de escritura +w para dar permisos de escritura\n y -x para quitar permisos de ejecucion y +x para dar permisos de ejecucion\n");
+  printf("\n");
+  printf("minimkdir [nombre_dir] crear un directorio \n");
+  printf("\n");
+  printf("minirmdir [nombre_dir] <- falta implementar pero elimina un directorio \n");
+  printf("\n");
+  printf("minitouch [nombre_dir] crea un archivo \n");
+  printf("\n");
+  printf("minils lista los contenidos del directorio actual \n");
+  printf("\n");
+  printf("minicat [nombre_archivo] muestra los contenidos de un archivo \n");
+  printf("\n");
+  printf("minichmod -[params] [nombre_archivo] cambia los permisos de un archivo,\n los permisos son -r para no poder leer +r para leer,\n -w para quitar permisos de escritura +w para dar permisos de escritura\n y -x para quitar permisos de ejecucion y +x para dar permisos de ejecucion\n");
+  printf("\n");
   printf("exit para salir de la consola\n");
 
 }
@@ -105,7 +122,7 @@ int main() {
   int seguir=1;
   char *palabras[100]; //palabras de max 100 caracteres, despues se cambia si se necesita
   pid_t pid;
-  int i=0;
+
   char salida[100];
   printf("iniciando mini shell escriba help para conocer los comandos disponibles o exit para salir\n");
   while (seguir){
@@ -131,7 +148,7 @@ int main() {
       ejecutarFuncionEnPoceso(pid, palabras[0],palabras);
     wait(NULL);
 
-      i++;
+
 
 
   }

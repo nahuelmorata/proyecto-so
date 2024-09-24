@@ -1,6 +1,5 @@
 #include <stdio.h>
 #include <sys/stat.h>
-#include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
 
@@ -10,7 +9,7 @@ int main(int argc, char **argv){
     mode_t permisos;
     
     if(argc<3){
-        fprintf(stderr, "permisos_archivo: Operandos incorrectos. \n");
+        fprintf(stderr, "Argumentos incorrectos. \n");
         exit_state = 1;
     }else{
         if(strcmp(*(argv+2),"r")==0)   permisos = S_IRUSR|S_IRGRP|S_IROTH;
