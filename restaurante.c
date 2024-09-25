@@ -1,4 +1,6 @@
 #include <stdlib.h>
+#include <sys/wait.h>
+#include <time.h>
 #include <unistd.h>
 #include <wait.h>
 #include <semaphore.h>
@@ -7,14 +9,23 @@
  #include <fcntl.h>
 #include <sys/stat.h>
 #include <string.h>
+
+
 #define MAXIMO_CLIENTES 10
 #define  PEDIDO_OK "OK"
+#define SEM_VACIO "vacio"
+#define SEM_TURNO "turno"
+#define SEM_TURNO_VIP "turno_vip"
+#define FILA_CLIENTES "fila_Clientes"
+#define FILA_CLIENTES_VIP "fila_Clientes_VIP"
+
+
 enum comidas{sin_comida=-1,hamburgesa=1,hamburgesa_VIP=11,vegano=2,vegano_VIP=22,papas=3,papas_VIP=33};
-sem_t vacio;
-pthread_mutex_t turno = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t turnoVIP = PTHREAD_MUTEX_INITIALIZER;
-int fila_Clientes=-1;
-int fila_Clientes_VIP=-1;
+sem_t *vacio;
+sem_t *turno;
+sem_t *turnoVIP;
+sem_t *fila_Clientes;
+sem_t *fila_Clientes_VIP;
 int ok_pedido[2];
 int ok_pedido_VIP[2];
 enum comidas ordenes_clientes[MAXIMO_CLIENTES];
@@ -44,29 +55,19 @@ int pedido=rand()%6;
 
 void *cliente(void *arg) {
   free(arg);
-  int primerCliente=fila_Clientes;
-  if(primerCliente<0){
-    close(ok_pedido[1]);
-    close(cliente_ordenes.comida_pedida[0]);
-    close(cliente_ordenes.numeroOrden[0]);
-    for (int i;i<MAXIMO_CLIENTES;i++) {
-      close(preparado_clientes[i].comida_pedida[1]);
-      close(preparado_clientes[i].numeroOrden[1]);
-    }
-    fila_Clientes++;
-  }
   enum comidas pedido=obtener_comida();
   int miNumero;
   int numero_comida_preparada=-1;
-  enum comidas comida_preparada=sin_comida;
-  int comida_recibida=0;
-  printf("Deberia dejar de venir a comer aca\n");
-  while (comida_recibida==0) {
-     if (sem_trywait(&vacio)) {
+  enum comidas comida_preparada = sin_comida;
 
-        pthread_mutex_lock(&turno);
-           miNumero=fila_Clientes;
-           fila_Clientes=(fila_Clientes+1)%MAXIMO_CLIENTES;
+  printf("Deberia dejar de venir a comer aca\n");
+  while (1) {
+    if (sem_trywait(vacio)) {
+        printf("Entre al restaurante\n");
+        sem_wait(turno);
+           sem_getvalue(fila_Clientes,&miNumero);
+           sem_post(fila_Clientes);
+           miNumero=miNumero%MAXIMO_CLIENTES;
             write(cliente_ordenes.comida_pedida[1],&pedido,sizeof(pedido));
             write(cliente_ordenes.numeroOrden[1],&miNumero,sizeof(int));
            printf("orden pedida de cliente %d y  valor %d\n",miNumero,pedido);
@@ -75,24 +76,28 @@ void *cliente(void *arg) {
               sleep(1);
             }
            printf("orden pedida correctamente\n");
-          pthread_mutex_unlock(&turno);
+          sem_post(turno);
           read(preparado_clientes[miNumero].comida_pedida[0],&comida_preparada,sizeof(int));
           read(preparado_clientes[miNumero].numeroOrden[0],&numero_comida_preparada,sizeof(int));
       
-        pthread_mutex_lock(&turno);
+        sem_wait(turno);
           printf("Cliente:la comida fue recibida, no es rica pero bueno\n");
-            fila_Clientes--;
-        pthread_mutex_unlock(&turno);
-      comida_recibida=1;
-     sem_post(&vacio);
+            sem_wait(fila_Clientes);
+        sem_post(turno);
+
+
+     sem_post(vacio);
+     break;
   } else {
         sleep(2);
         printf("Cliente: Me canse me vuelvo mas tarde\n");
      }
-
   }
-  pthread_exit(NULL);
+
+exit(0);
 }
+
+
 
 
 enum comidas obtener_comida_VIP(){
@@ -111,29 +116,19 @@ int pedido=rand()%6;
 }
 void *cliente_VIP(void *arg){
    free(arg);
-  int primerCliente=fila_Clientes_VIP;
-  if(primerCliente<0){
-    close(ok_pedido_VIP[1]);
-    close(cliente_ordenes_VIP.comida_pedida[0]);
-    close(cliente_ordenes_VIP.numeroOrden[0]);
-    for (int i;i<MAXIMO_CLIENTES;i++) {
-      close(preparado_clientes_VIP[i].comida_pedida[1]);
-      close(preparado_clientes_VIP[i].numeroOrden[1]);
-    }
-    fila_Clientes_VIP++;
-  }
+
   enum comidas pedido=obtener_comida_VIP();
   int miNumero;
   int numero_comida_preparada=-1;
   enum comidas comida_preparada=sin_comida;
-  int comida_recibida=0;
   printf("Soy VIP pero deberia dejar de venir a comer aca\n");
-  while (comida_recibida==0) {
-     if (sem_trywait(&vacio)) {
-
-        pthread_mutex_lock(&turnoVIP);
-           miNumero=fila_Clientes_VIP;
-           fila_Clientes_VIP=(fila_Clientes_VIP+1)%MAXIMO_CLIENTES;
+  while (1) {
+     if (sem_trywait(vacio)) {
+          printf("Entre al restaurante");
+        sem_wait(turnoVIP);
+           sem_getvalue(fila_Clientes_VIP,&miNumero);
+           sem_post(fila_Clientes_VIP);
+           miNumero=miNumero%MAXIMO_CLIENTES;
            write(cliente_ordenes_VIP.comida_pedida[1],&pedido,sizeof(pedido));
            write(cliente_ordenes_VIP.numeroOrden[1],&miNumero,sizeof(int));
            printf("orden VIP pedida de cliente %d y  valor %d\n",miNumero,pedido);
@@ -142,23 +137,24 @@ void *cliente_VIP(void *arg){
               sleep(1);
             }
           printf("orden VIP pedida correctamente\n");
-          pthread_mutex_unlock(&turnoVIP);
+          sem_post(turnoVIP);
           read(preparado_clientes_VIP[miNumero].comida_pedida[0],&comida_preparada,sizeof(int));
           read(preparado_clientes_VIP[miNumero].numeroOrden[0],&numero_comida_preparada,sizeof(int));
       
-        pthread_mutex_lock(&turnoVIP);
+        sem_wait(turnoVIP);
           printf("VIP:La comida de aca es malisima sin embargo no puedo parar de venir, lo peor es que me hice VIP\n");
-          fila_Clientes_VIP--;
-        pthread_mutex_unlock(&turnoVIP);
-            comida_recibida=1;
-     sem_post(&vacio);
+          sem_wait(fila_Clientes_VIP);
+        sem_post(turnoVIP);
+     sem_post(vacio);
+     break;
   } else {
         sleep(2);
         printf("VIP:Soy vip y tengro prioridad,me canse me vuelvo mas tarde\n");
      }
-
   }
-  pthread_exit(NULL);
+
+
+  exit(0);
   
 }
 
@@ -453,14 +449,13 @@ void crear_laburantes(){
           int pid3=fork();
           if(pid3==0){
             printf("empleado papas 1 creado\n");
-            empleado_papas(1);
+           empleado_papas(1);
           }else {
             if(pid3>0){
               int pid4=fork();
               if(pid4==0){
                 printf("empleado_vegano creado\n");
-
-                empleado_vegano();
+               empleado_vegano();
               }else {
               if(pid4>0){
                 int pid5=fork();
@@ -494,25 +489,59 @@ void crear_laburantes(){
     }
 }
 
-void crear_clientes(int total_clientes,pthread_t clientes_totales[]){
+void crear_clientes_esperar(int total_clientes,int clientes_totales[]){
+   close(ok_pedido[1]);
+    close(cliente_ordenes.comida_pedida[0]);
+    close(cliente_ordenes.numeroOrden[0]);
+    for (int i=0;i<MAXIMO_CLIENTES;i++) {
+      close(preparado_clientes[i].comida_pedida[1]);
+      close(preparado_clientes[i].numeroOrden[1]);
+    }
+
+    close(ok_pedido_VIP[1]);
+    close(cliente_ordenes_VIP.comida_pedida[0]);
+    close(cliente_ordenes_VIP.numeroOrden[0]);
+    for (int i=0;i<MAXIMO_CLIENTES;i++) {
+      close(preparado_clientes_VIP[i].comida_pedida[1]);
+      close(preparado_clientes_VIP[i].numeroOrden[1]);
+    }
   for (int i=0;i<total_clientes;i++) {
           sleep(1);
-          if((i%2)==0){
-          pthread_create(&clientes_totales[i],NULL,cliente_VIP,NULL);
-          printf("cliente VIP creado\n");
-          }else {
-           pthread_create(&clientes_totales[i],NULL,cliente,NULL);
-          printf("cliente creado\n");
-        }
+          clientes_totales[i]=fork();
+          if(clientes_totales[i]==0){
+            if ((i%5)==0){
+              printf("Cliente VIP %d creado\n",i);
+              cliente_VIP(NULL);
 
+            }else {
+              printf("Cliente %d creado\n",i);
+              cliente(NULL);
+            }
+          }else {
+            if(clientes_totales[i]<0){
+              perror("Error creando cliente");
+              exit(2);
+            }
+          }
       }
+
+      for (int i=0;i<total_clientes ;i++ ) {
+              wait(&clientes_totales[i]);
+      }
+
+
+}
+
+void parte_clientes() {
+          int total_clientes = MAXIMO_CLIENTES;
+          int clientes_totales[total_clientes];
+          crear_clientes_esperar(total_clientes, clientes_totales);
+          printf("====================================================Todos los clientes satisfechos============================================================\n");
 }
 
 
+int main() {
 
-int main()
-{
-  sem_init(&vacio, 0, MAXIMO_CLIENTES);
   for (int i=0;i<MAXIMO_CLIENTES;i++) {
     ordenes_clientes[i]=sin_comida;
     ordenes_clientes_VIP[i]=sin_comida;
@@ -521,27 +550,49 @@ int main()
 
 int pid=fork();
 
-    if(pid>0){
-    //  wait(&pid);
-    crear_laburantes();
-
-    }else {
-      if(pid==0){
-         int total_clientes=MAXIMO_CLIENTES+10;
-         pthread_t clientes_totales[total_clientes];
-
-      crear_clientes(total_clientes,clientes_totales);
-
-      for (int i=0;i<total_clientes;i++) {
-        pthread_join(clientes_totales[i],NULL);
-      }
-      printf("====================================================Todos los clientes satisfechos============================================================\n");
+    if(pid==0){
+      crear_laburantes();
+      sleep(5);
       exit(0);
+    }else {
+      if(pid>0){
+          vacio= sem_open(SEM_VACIO,O_CREAT | O_EXCL,0644,MAXIMO_CLIENTES);
+
+          turno=sem_open(SEM_TURNO,O_CREAT | O_EXCL,0644,1);
+          turnoVIP=sem_open(SEM_TURNO_VIP,O_CREAT | O_EXCL,0644,1);
+
+          fila_Clientes=sem_open(FILA_CLIENTES,O_CREAT | O_EXCL,0644,1);
+          fila_Clientes_VIP =sem_open(FILA_CLIENTES_VIP, O_CREAT | O_EXCL, 0644, 1);
+
+          parte_clientes();
+
+          sem_close(vacio);
+
+          sem_close(turno);
+          sem_close(turnoVIP);
+
+          sem_close(fila_Clientes);
+          sem_close(fila_Clientes_VIP);
+
+          sem_unlink(SEM_VACIO);
+          sem_unlink(SEM_TURNO);
+          sem_unlink(SEM_TURNO_VIP);
+
+          sem_unlink(FILA_CLIENTES);
+          sem_unlink(FILA_CLIENTES_VIP);
+
+          wait(&pid);
       } else {
-        perror("Error creando clientes");
-        exit(EXIT_FAILURE); 
+        perror("Error creando clientes\n");
+        exit(EXIT_FAILURE);
       }
+
     }
-  //sem_destroy(&vacio);
-  return EXIT_SUCCESS;
+
+
+
+    // sem_destroy(&vacio);
+    return EXIT_SUCCESS;
 }
+
+
