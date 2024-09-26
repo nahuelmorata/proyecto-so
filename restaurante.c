@@ -72,9 +72,9 @@ void *cliente(void *arg) {
             write(cliente_ordenes.numeroOrden[1],&miNumero,sizeof(int));
            printf("orden pedida de cliente %d y  valor %d\n",miNumero,pedido);
             char *ok="";
-            while (read(ok_pedido[0],&ok,strlen(PEDIDO_OK))<1) { 
+            read(ok_pedido[0],&ok,strlen(PEDIDO_OK));
               sleep(1);
-            }
+
            printf("orden pedida correctamente\n");
           sem_post(turno);
           read(preparado_clientes[miNumero].comida_pedida[0],&comida_preparada,sizeof(int));
@@ -133,9 +133,8 @@ void *cliente_VIP(void *arg){
            write(cliente_ordenes_VIP.numeroOrden[1],&miNumero,sizeof(int));
            printf("orden VIP pedida de cliente %d y  valor %d\n",miNumero,pedido);
             char *ok="";
-            while (read(ok_pedido_VIP[0],&ok,strlen(PEDIDO_OK))<1) {
-              sleep(1);
-            }
+            read(ok_pedido_VIP[0],&ok,strlen(PEDIDO_OK));
+            sleep(1);
           printf("orden VIP pedida correctamente\n");
           sem_post(turnoVIP);
           read(preparado_clientes_VIP[miNumero].comida_pedida[0],&comida_preparada,sizeof(int));
@@ -396,16 +395,12 @@ if (fcntl(cliente_ordenes_VIP.comida_pedida[0], F_SETFL, O_NONBLOCK) < 0)
     perror("Error creando pipe");
     exit(EXIT_FAILURE);
   }
-if (fcntl(ok_pedido[0], F_SETFL, O_NONBLOCK) < 0)
-        exit(2);
 
 resultados_pipe=pipe(ok_pedido_VIP);
   if(resultados_pipe<0){
     perror("Error creando pipe");
     exit(EXIT_FAILURE);
   }
-if (fcntl(ok_pedido_VIP[0], F_SETFL, O_NONBLOCK) < 0)
-        exit(2);
 
   for (int i = 0; i < MAXIMO_CLIENTES; i++) {
 
