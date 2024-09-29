@@ -49,8 +49,7 @@ int pedido=rand()%6;
   return comida;
 }
 
-void *cliente(void *arg) {
-  free(arg);
+void cliente() {
   enum comidas pedido=obtener_comida();
   int miNumero;
   int numero_comida_preparada=-1;
@@ -110,8 +109,8 @@ int pedido=rand()%6;
 
   return comida;
 }
-void *cliente_VIP(void *arg){
-   free(arg);
+void cliente_VIP(){
+   
 
   enum comidas pedido=obtener_comida_VIP();
   int miNumero;
@@ -204,6 +203,11 @@ int isVIP=0;
     }else {
       write(ok_pedido[1], PEDIDO_OK, sizeof(PEDIDO_OK));
     }
+
+    /*
+     * Podria haber esperado por una comfirmaciond del empleado para ver si no lo estoy pasando de ordenes pero bueno creo que ese nivel
+     * de verificacion ya es demasiado
+     */
     nroOrden=-1;
     comida_por_preparar=sin_comida;
     }else{
@@ -213,8 +217,6 @@ int isVIP=0;
   }
 
 }
-
-
 
 
 
@@ -271,10 +273,9 @@ void empleado_vegano(){
       cocinar=sin_comida;
       numeroEnfila=-1;
                 sleep(1);
-    }else {
+    }
         printf("Vegano:Esto de laburar en comida rapida es temporal\n");
         sleep(3);
-    } 
   }
 
 
@@ -303,10 +304,10 @@ void empleado_papas(int nro_empleado){
         cocinar=sin_comida;
         numeroEnfila=-1;
         sleep(1);
-    }else {
+    }
         printf("Papas %d:Esto de laburar en comida rapida es temporal\n",nro_empleado);
         sleep(4);
-    } 
+     
   }
 }
 
@@ -320,8 +321,7 @@ void crear_pipes(){
     perror("Error creando pipe");
     exit(EXIT_FAILURE);
   }
- if (fcntl(emp_papas.comida_pedida[0], F_SETFL, O_NONBLOCK) < 0)
-        exit(2);
+
 
    resultados_pipe=pipe(emp_papas.numeroOrden);
   if(resultados_pipe<0){
@@ -333,8 +333,7 @@ void crear_pipes(){
     perror("Error creando pipe");
     exit(EXIT_FAILURE);
   }
- if (fcntl(emp_vegano.comida_pedida[0], F_SETFL, O_NONBLOCK) < 0)
-        exit(2);
+
 
  resultados_pipe=pipe(emp_vegano.numeroOrden);
   if(resultados_pipe<0){
@@ -347,9 +346,7 @@ void crear_pipes(){
     exit(EXIT_FAILURE);
   }
 
-  if (fcntl(emp_hamburgesas.comida_pedida[0], F_SETFL, O_NONBLOCK) < 0)
-        exit(2);
-
+  
  resultados_pipe=pipe(emp_hamburgesas.numeroOrden);
   if(resultados_pipe<0){
     perror("Error creando pipe");

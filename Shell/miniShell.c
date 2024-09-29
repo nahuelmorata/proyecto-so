@@ -9,22 +9,33 @@
 
 void ejecutarFuncionEnPoceso(int pid, char dirps[], char *args[]){
   if (pid==0) {
+
     execvp(dirps,args);
     printf("Error when executing process, try checking the arguments\n");
-    exit(1);
+    exit(EXIT_FAILURE);
   }else {
     if(pid<0){
     perror("Error creating proceso");
-    exit(1);
+    exit(EXIT_FAILURE);
     }
   }
 }
 
-char * encontrarRutaComando(char * entrada){
+char *encontrarRutaComando(char *entrada) {
 
-  if(strcmp(entrada,"help")==0)
-    return NULL;
-  //Continuar
+  if(strcmp(entrada,"minils")==0)
+    return "./minils";
+  if(strcmp(entrada,"minichmod")==0)
+    return "./minils";
+  if(strcmp(entrada,"minirmdir")==0)
+    return "./minirmdir";
+  if(strcmp(entrada,"minitouch")==0)
+    return "./minitouch";
+  if (strcmp(entrada, "minicat") == 0)
+    return "./minicat";
+  if (strcmp(entrada, "minimkdir") == 0)
+    return "./minimkdir";
+
 
   return NULL;
 }
@@ -97,6 +108,7 @@ void siguienteComando(){
     printf("[%s@%s %s]$ ", pw->pw_name, hostname, lastWord);
 }
 
+
 void getHelp(){
   printf("help muestra esta ayuda \n");
   printf("\n");
@@ -134,22 +146,35 @@ int main() {
     salir= strcmp(salida,"exit");
     
     if(salir==0){
+      uid_t uid = getuid();
+      struct passwd *pw = getpwuid(uid);
+      if (pw == NULL) {
+        perror("Error getting user's name");
+          return 2 ;
+      }
+      printf("Saliendo de mini Shell, bye %s\n",pw->pw_name);
       break;
     }
 
     int ayuda = strcmp(salida, "help");
     if(ayuda==0){
       getHelp();
+      continue;
     }
 
     construirArgumentos(salida, palabras);
     pid = fork();
-    if((int)pid<=0)
-      ejecutarFuncionEnPoceso(pid, palabras[0],palabras);
-    wait(NULL);
-
-
-
+    if((int)pid<=0){
+      char * archivoAEjecutar=encontrarRutaComando(palabras[0]);
+      if(archivoAEjecutar!=NULL)
+      {
+      ejecutarFuncionEnPoceso(pid, archivoAEjecutar,palabras);
+      }else {
+          printf("Comando no reconocido, pruebe escribiendo help para ver los comandos disponibles\n");
+          exit(0);
+      }
+    }
+    wait(&pid);
 
   }
 
