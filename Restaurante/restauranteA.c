@@ -1,6 +1,5 @@
 #include <stdlib.h>
 #include <sys/wait.h>
-#include <time.h>
 #include <unistd.h>
 #include <wait.h>
 #include <semaphore.h>
@@ -28,6 +27,7 @@ sem_t *fila_Clientes;
 sem_t *fila_Clientes_VIP;
 int ok_pedido[2];
 int ok_pedido_VIP[2];
+int hay_pedido[2];
 
 struct comunicacion_empleados {
     int comida_pedida[2];
@@ -50,6 +50,7 @@ int pedido=rand()%6;
 }
 
 void cliente() {
+    int señal_pedido=1;
   enum comidas pedido=obtener_comida();
   int miNumero;
   int numero_comida_preparada=-1;
@@ -57,12 +58,14 @@ void cliente() {
 
   printf("Deberia dejar de venir a comer aca\n");
   while (1) {
-    if (sem_trywait(vacio)) {
+    if (sem_trywait(vacio)==0) {
         printf("Entre al restaurante\n");
         sem_wait(turno);
            sem_getvalue(fila_Clientes,&miNumero);
            sem_post(fila_Clientes);
            miNumero=miNumero%MAXIMO_CLIENTES;
+           printf("Valor cliente es %d\n",miNumero);
+           write(hay_pedido[1],&señal_pedido ,sizeof(int) );
             write(cliente_ordenes.comida_pedida[1],&pedido,sizeof(pedido));
             write(cliente_ordenes.numeroOrden[1],&miNumero,sizeof(int));
            printf("orden pedida de cliente %d y  valor %d\n",miNumero,pedido);
@@ -111,19 +114,22 @@ int pedido=rand()%6;
 }
 void cliente_VIP(){
    
-
+  int señal_pedido=1;
   enum comidas pedido=obtener_comida_VIP();
   int miNumero;
   int numero_comida_preparada=-1;
   enum comidas comida_preparada=sin_comida;
   printf("Soy VIP pero deberia dejar de venir a comer aca\n");
   while (1) {
-     if (sem_trywait(vacio)) {
+     if (sem_trywait(vacio)==0) {
           printf("Entre al restaurante\n");
         sem_wait(turnoVIP);
            sem_getvalue(fila_Clientes_VIP,&miNumero);
            sem_post(fila_Clientes_VIP);
            miNumero=miNumero%MAXIMO_CLIENTES;
+
+           write(hay_pedido[1],&señal_pedido ,sizeof(int) );
+           printf("Valor cliente es %d\n",miNumero);
            write(cliente_ordenes_VIP.comida_pedida[1],&pedido,sizeof(pedido));
            write(cliente_ordenes_VIP.numeroOrden[1],&miNumero,sizeof(int));
            printf("orden VIP pedida de cliente %d y  valor %d\n",miNumero,pedido);
@@ -131,7 +137,7 @@ void cliente_VIP(){
             read(ok_pedido_VIP[0],&ok,strlen(PEDIDO_OK));
             sleep(1);
           printf("orden VIP pedida correctamente\n");
-          sem_post(turnoVIP);
+        sem_post(turnoVIP);
           read(preparado_clientes_VIP[miNumero].comida_pedida[0],&comida_preparada,sizeof(int));
           read(preparado_clientes_VIP[miNumero].numeroOrden[0],&numero_comida_preparada,sizeof(int));
       
@@ -154,6 +160,7 @@ void cliente_VIP(){
 
 void empleado_ordenes(){
   enum comidas comida_por_preparar;
+  close(hay_pedido[1]);
   close(emp_papas.comida_pedida[0]);
   close(emp_vegano.comida_pedida[0]);
   close(emp_hamburgesas.comida_pedida[0]);
@@ -170,9 +177,11 @@ void empleado_ordenes(){
       close(preparado_clientes[i].comida_pedida[0]);
       close(preparado_clientes[i].numeroOrden[0]);
     }
-int isVIP=0;
+    int isVIP = 0;
+    int hay_pedidos;
   while (1) {
 
+    read(hay_pedido[0],&hay_pedidos,sizeof(int));
     if(read(cliente_ordenes_VIP.comida_pedida[0], &comida_por_preparar, sizeof(int))>0){
       read(cliente_ordenes_VIP.numeroOrden[0],&nroOrden,sizeof(int));
       isVIP++;
@@ -180,6 +189,7 @@ int isVIP=0;
       if(read(cliente_ordenes.comida_pedida[0], &comida_por_preparar, sizeof(int))>0)
               read(cliente_ordenes.numeroOrden[0],&nroOrden,sizeof(int));
     }
+
     if (comida_por_preparar > (sin_comida) && nroOrden>=0) {
       printf("Siguiente pedido es %d al cliente %d\n",comida_por_preparar,nroOrden);
       if(hamburgesa==comida_por_preparar || comida_por_preparar==hamburgesa_VIP){
@@ -205,7 +215,7 @@ int isVIP=0;
     }
 
     /*
-     * Podria haber esperado por una comfirmaciond del empleado para ver si no lo estoy pasando de ordenes pero bueno creo que ese nivel
+     * Podria haber esperado por una confirmacion del empleado para ver si no lo estoy pasando de ordenes de mas, pero bueno, creo que ese nivel
      * de verificacion ya es demasiado
      */
     nroOrden=-1;
@@ -394,6 +404,11 @@ resultados_pipe=pipe(ok_pedido_VIP);
     perror("Error creando pipe");
     exit(EXIT_FAILURE);
   }
+ resultados_pipe=pipe(hay_pedido);
+  if(resultados_pipe<0){
+    perror("Error creando pipe");
+    exit(EXIT_FAILURE);
+  }
 
   for (int i = 0; i < MAXIMO_CLIENTES; i++) {
 
@@ -481,6 +496,7 @@ void crear_clientes_esperar(int total_clientes,int clientes_totales[]){
    close(ok_pedido[1]);
     close(cliente_ordenes.comida_pedida[0]);
     close(cliente_ordenes.numeroOrden[0]);
+    close(hay_pedido[0]);
     for (int i=0;i<MAXIMO_CLIENTES;i++) {
       close(preparado_clientes[i].comida_pedida[1]);
       close(preparado_clientes[i].numeroOrden[1]);
@@ -499,11 +515,11 @@ void crear_clientes_esperar(int total_clientes,int clientes_totales[]){
           if(clientes_totales[i]==0){
             if ((i%5)==0){
               printf("Cliente VIP %d creado\n",i);
-              cliente_VIP(NULL);
+              cliente_VIP();
 
             }else {
               printf("Cliente %d creado\n",i);
-              cliente(NULL);
+              cliente();
             }
           }else {
             if(clientes_totales[i]<0){
@@ -524,6 +540,7 @@ void parte_clientes() {
           int total_clientes = MAXIMO_CLIENTES;
           int clientes_totales[total_clientes];
           crear_clientes_esperar(total_clientes, clientes_totales);
+          sleep(2);
           printf("====================================================Todos los clientes satisfechos============================================================\n");
 }
 

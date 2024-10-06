@@ -6,8 +6,9 @@
 #define NUMERO_RENOS 9
 #define NUMERO_ELFOS 3
 
-int cant_renos;
-int cant_elfos;
+sem_t cant_renos;
+sem_t cant_elfos;
+
 int santa_seguir;
 pthread_mutex_t mutex=PTHREAD_MUTEX_INITIALIZER;
 
@@ -43,8 +44,9 @@ void *santa(void *args){
   }
     sleep(1);
     printf("Todos los renos atados\n");
+    sem_post(&cant_renos);
 
-  for (int i=0;i<NUMERO_ELFOS;i++) {
+    for (int i=0;i<NUMERO_ELFOS;i++) {
    sem_post(&santa_atiende_elfo);
     printf("Elfo siendo atendido\n");
    sem_wait(&elfo_resuelto);
@@ -53,6 +55,7 @@ void *santa(void *args){
   }
     sleep(1);
     printf("Todos los elfos atendidos\n");
+    sem_post(&cant_elfos);
    printf("======Renos atados y elfos atendidos=====\n");
     sleep(5);
   }
@@ -63,13 +66,10 @@ void *santa(void *args){
 void *renos(void *args)
 {  args=NULL;
   free(args);
+
   sem_wait(&renos_trineo);
   pthread_mutex_lock(&mutex);
-    if(cant_renos==NUMERO_RENOS)
-     {
-      pthread_exit(NULL);
-     }
-    cant_renos++;
+      sem_post(&cant_renos);
   pthread_mutex_unlock(&mutex);
 
   sem_post(&reno_espera);
@@ -77,9 +77,10 @@ void *renos(void *args)
     printf("Santa atando\n");
   sem_post(&reno_resuelto);
   sem_wait(&santa_resuelto);
+
   pthread_mutex_lock(&mutex);
-   cant_renos--;
-    if(cant_renos==0){
+
+    if(sem_trywait(&cant_renos)){
       for (int i=0;i<NUMERO_RENOS;i++) {
         sem_post(&renos_trineo);
       }
@@ -96,10 +97,7 @@ void *elfos(void *args)
   free(args);
   sem_wait(&elfos_problema);
   pthread_mutex_lock(&mutex);
-    if(cant_elfos==NUMERO_ELFOS){
-      pthread_exit(NULL);
-    }
-    cant_elfos++;
+    sem_post(&cant_elfos);
   pthread_mutex_unlock(&mutex);
   sem_post(&elfo_espera);
   sem_wait(&santa_atiende_elfo);
@@ -107,8 +105,8 @@ void *elfos(void *args)
   sem_post(&elfo_resuelto);
   sem_wait(&santa_resuelto);
   pthread_mutex_lock(&mutex);
-    cant_elfos--;
-    if(cant_elfos==0){
+
+    if(sem_trywait(&cant_elfos)){
       for (int i=0;i<NUMERO_ELFOS;i++) {
          sem_post(&elfos_problema);
       }
@@ -122,10 +120,8 @@ void *elfos(void *args)
 }
 
 
-int main()
-{
-  //para compilar programa de mejor manera utilizar las siguientes flags
-  // -Wall -Werror -Wextra -Wpedantic -pedantic-errors 
+int main() {
+
    
   //El numero de elfos debe ser multiplo de NUMERO_ELFOS 
   // El numero de renos debe ser multiplo de NUMERO_RENOS, similar a los elfos
@@ -134,9 +130,10 @@ int main()
   pthread_t santaT;
   pthread_t renosT[total_renos];
   pthread_t elfosT[total_elfos];
-  cant_renos=0;
-  cant_elfos=0;
+
   santa_seguir=1;
+  sem_init(&cant_elfos,0,0);
+  sem_init(&cant_renos,0,0);
   sem_init(&reno_espera,0,0);
   sem_init(&elfo_espera,0,0);
   sem_init(&reno_resuelto,0,0);
