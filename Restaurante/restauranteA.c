@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <sys/wait.h>
+#include <time.h>
 #include <unistd.h>
 #include <wait.h>
 #include <semaphore.h>
@@ -15,24 +16,27 @@
 #define SEM_VACIO "vacio"
 #define SEM_TURNO "turno"
 #define SEM_TURNO_VIP "turno_vip"
-#define FILA_CLIENTES "fila_Clientes"
-#define FILA_CLIENTES_VIP "fila_Clientes_VIP"
 
 
-enum comidas{sin_comida=-1,hamburgesa=1,hamburgesa_VIP=11,vegano=2,vegano_VIP=22,papas=3,papas_VIP=33};
+
+enum comidas{sin_comida=-1,hamburgesa=1,vegano=2,papas=3};
 sem_t *vacio;
 sem_t *turno;
 sem_t *turnoVIP;
-sem_t *fila_Clientes;
-sem_t *fila_Clientes_VIP;
+
 int ok_pedido[2];
 int ok_pedido_VIP[2];
 int hay_pedido[2];
 
 struct comunicacion_empleados {
     int comida_pedida[2];
-    int numeroOrden[2];
-}emp_papas,emp_hamburgesas,emp_vegano,cliente_ordenes,cliente_ordenes_VIP,preparado_clientes[MAXIMO_CLIENTES],preparado_clientes_VIP[MAXIMO_CLIENTES];
+}emp_papas,emp_hamburgesas,emp_vegano,cliente_ordenes,cliente_ordenes_VIP,preparado_clientes,preparado_clientes_VIP;
+
+struct pedido{
+  enum comidas comida;
+  int numeroOrden;
+  int isVIP;
+};
 
 enum comidas obtener_comida(){
 int pedido=rand()%6;
@@ -49,112 +53,102 @@ int pedido=rand()%6;
   return comida;
 }
 
-void cliente() {
+void cliente(int nro_creado) {
     int señal_pedido=1;
-  enum comidas pedido=obtener_comida();
-  int miNumero;
-  int numero_comida_preparada=-1;
-  enum comidas comida_preparada = sin_comida;
+  enum comidas comida=obtener_comida();
+ struct pedido miOrden;
+  int myPID=getpid();
+ miOrden.comida=comida;
+ miOrden.numeroOrden = myPID;
+ miOrden.isVIP = -1;
 
+
+struct pedido miComidaLista;
   printf("Deberia dejar de venir a comer aca\n");
+     char *ok="";
   while (1) {
     if (sem_trywait(vacio)==0) {
-        printf("Entre al restaurante\n");
-        sem_wait(turno);
-           sem_getvalue(fila_Clientes,&miNumero);
-           sem_post(fila_Clientes);
-           miNumero=miNumero%MAXIMO_CLIENTES;
-           printf("Valor cliente es %d\n",miNumero);
-           write(hay_pedido[1],&señal_pedido ,sizeof(int) );
-            write(cliente_ordenes.comida_pedida[1],&pedido,sizeof(pedido));
-            write(cliente_ordenes.numeroOrden[1],&miNumero,sizeof(int));
-           printf("orden pedida de cliente %d y  valor %d\n",miNumero,pedido);
-            char *ok="";
-            read(ok_pedido[0],&ok,strlen(PEDIDO_OK));
-              sleep(1);
+        printf("Entre al restaurante soy el %d\n",nro_creado);
 
-           printf("orden pedida correctamente\n");
-          sem_post(turno);
-          read(preparado_clientes[miNumero].comida_pedida[0],&comida_preparada,sizeof(int));
-          read(preparado_clientes[miNumero].numeroOrden[0],&numero_comida_preparada,sizeof(int));
-      
         sem_wait(turno);
+        //   printf("Valor cliente es %d\n",myPID);
+           write(cliente_ordenes.comida_pedida[1],&miOrden,sizeof(struct pedido));
+
+           write(hay_pedido[1],&señal_pedido ,sizeof(int) );
+           printf("orden pedida de cliente %d y  valor %d\n",myPID,miOrden.comida);
+
+            read(ok_pedido[0],&ok,strlen(PEDIDO_OK));
+              // sleep(1);
+           printf("orden pedida correctamente\n");
+          read(preparado_clientes.comida_pedida[0],&miComidaLista,sizeof(struct pedido));
+
           printf("Cliente:la comida fue recibida, no es rica pero bueno\n");
-            sem_wait(fila_Clientes);
         sem_post(turno);
 
-
      sem_post(vacio);
-     break;
+     printf("Deje mi espacio en el restaurante soy el %d\n",nro_creado);
+    exit(0);
   } else {
-        sleep(2);
-        printf("Cliente: Me canse me vuelvo mas tarde\n");
+        // sleep(2);
+   //     printf("Cliente: Me canse me vuelvo mas tarde\n");
      }
   }
 
-exit(0);
 }
 
 
 
 
-enum comidas obtener_comida_VIP(){
-int pedido=rand()%6;
-  enum comidas comida;
-      switch (pedido) {
-        case 0:comida=hamburgesa_VIP;
-          break;
-        case 1:comida=vegano_VIP;
-          break;    
-        default:comida=papas_VIP;
-          break;
-      }
 
-  return comida;
-}
-void cliente_VIP(){
+void cliente_VIP(int nro_creado){
    
   int señal_pedido=1;
-  enum comidas pedido=obtener_comida_VIP();
-  int miNumero;
-  int numero_comida_preparada=-1;
-  enum comidas comida_preparada=sin_comida;
+  enum comidas comida = obtener_comida();
+
+
+  struct pedido miOrden;
+  int myPID=getpid();
+ miOrden.comida=comida;
+ miOrden.numeroOrden = myPID;
+ miOrden.isVIP=0;
+
+
+
+
+
+struct pedido miComidaLista;
   printf("Soy VIP pero deberia dejar de venir a comer aca\n");
+    char *ok="";
   while (1) {
      if (sem_trywait(vacio)==0) {
-          printf("Entre al restaurante\n");
-        sem_wait(turnoVIP);
-           sem_getvalue(fila_Clientes_VIP,&miNumero);
-           sem_post(fila_Clientes_VIP);
-           miNumero=miNumero%MAXIMO_CLIENTES;
+          printf("Entre al restaurante soy el vip %d\n",nro_creado);
 
-           write(hay_pedido[1],&señal_pedido ,sizeof(int) );
-           printf("Valor cliente es %d\n",miNumero);
-           write(cliente_ordenes_VIP.comida_pedida[1],&pedido,sizeof(pedido));
-           write(cliente_ordenes_VIP.numeroOrden[1],&miNumero,sizeof(int));
-           printf("orden VIP pedida de cliente %d y  valor %d\n",miNumero,pedido);
-            char *ok="";
-            read(ok_pedido_VIP[0],&ok,strlen(PEDIDO_OK));
-            sleep(1);
-          printf("orden VIP pedida correctamente\n");
-        sem_post(turnoVIP);
-          read(preparado_clientes_VIP[miNumero].comida_pedida[0],&comida_preparada,sizeof(int));
-          read(preparado_clientes_VIP[miNumero].numeroOrden[0],&numero_comida_preparada,sizeof(int));
-      
         sem_wait(turnoVIP);
+         write(cliente_ordenes_VIP.comida_pedida[1], &miOrden, sizeof(struct pedido));
+
+          write(hay_pedido[1],&señal_pedido ,sizeof(int) );
+         //  printf("Valor cliente es %d\n",myPID);
+
+           printf("orden VIP pedida de cliente %d y  valor %d\n",myPID,miOrden.comida);
+
+            read(ok_pedido_VIP[0],&ok,strlen(PEDIDO_OK));
+            // sleep(1);
+          printf("orden VIP pedida correctamente\n");
+
+
+       read(preparado_clientes_VIP.comida_pedida[0],&miComidaLista,sizeof(struct pedido));
           printf("VIP:La comida de aca es malisima sin embargo no puedo parar de venir, lo peor es que me hice VIP\n");
-          sem_wait(fila_Clientes_VIP);
         sem_post(turnoVIP);
+ printf("Deje mi espacio en el restaurante soy el %d\n",nro_creado);
      sem_post(vacio);
-     break;
+     exit(0);
   } else {
-        sleep(2);
+         sleep(2);
         printf("VIP:Soy vip y tengro prioridad,me canse me vuelvo mas tarde\n");
      }
   }
 
 
-  exit(0);
   
 }
 
@@ -164,52 +158,52 @@ void empleado_ordenes(){
   close(emp_papas.comida_pedida[0]);
   close(emp_vegano.comida_pedida[0]);
   close(emp_hamburgesas.comida_pedida[0]);
-  close(emp_papas.numeroOrden[0]);
-  close(emp_vegano.numeroOrden[0]);
-  close(emp_hamburgesas.numeroOrden[0]);
+
   close(cliente_ordenes.comida_pedida[1]);
-  close(cliente_ordenes.numeroOrden[1]);
+
   int nroOrden=-1;
   comida_por_preparar = sin_comida;
   close(ok_pedido[0]);
   close(ok_pedido_VIP[0]);
-  for (int i=0;i<MAXIMO_CLIENTES;i++) {
-      close(preparado_clientes[i].comida_pedida[0]);
-      close(preparado_clientes[i].numeroOrden[0]);
-    }
+
+      close(preparado_clientes.comida_pedida[0]);
+
     int isVIP = 0;
     int hay_pedidos;
+    struct pedido nuevo_pedido;
   while (1) {
 
     read(hay_pedido[0],&hay_pedidos,sizeof(int));
-    if(read(cliente_ordenes_VIP.comida_pedida[0], &comida_por_preparar, sizeof(int))>0){
-      read(cliente_ordenes_VIP.numeroOrden[0],&nroOrden,sizeof(int));
-      isVIP++;
+    if(read(cliente_ordenes_VIP.comida_pedida[0], &nuevo_pedido, sizeof(struct pedido))>0){
+      printf("Es pedido VIP\n");
     } else {
-      if(read(cliente_ordenes.comida_pedida[0], &comida_por_preparar, sizeof(int))>0)
-              read(cliente_ordenes.numeroOrden[0],&nroOrden,sizeof(int));
+      if(read(cliente_ordenes.comida_pedida[0], &nuevo_pedido, sizeof(struct pedido))>0)
+        printf("Es normal\n");
     }
 
-    if (comida_por_preparar > (sin_comida) && nroOrden>=0) {
+    nroOrden=nuevo_pedido.numeroOrden;
+    comida_por_preparar=nuevo_pedido.comida;
+
       printf("Siguiente pedido es %d al cliente %d\n",comida_por_preparar,nroOrden);
-      if(hamburgesa==comida_por_preparar || comida_por_preparar==hamburgesa_VIP){
-          printf("comida pedida al empleado hamburgesa\n") ;
-         write(emp_hamburgesas.comida_pedida[1],&comida_por_preparar,sizeof(int));
-         write(emp_hamburgesas.numeroOrden[1],&nroOrden,sizeof(int));
+      if(hamburgesa==comida_por_preparar  ){
+      //    printf("comida pedida al empleado hamburgesa\n") ;
+      write(emp_hamburgesas.comida_pedida[1], &nuevo_pedido,
+            sizeof(struct pedido));
+
       }
-      if(comida_por_preparar==vegano || comida_por_preparar==vegano_VIP){
-      printf("comida pedida al empleado vegano\n") ;
-       write(emp_vegano.comida_pedida[1],&comida_por_preparar,sizeof(int));
-      write(emp_vegano.numeroOrden[1],&nroOrden,sizeof(int)); 
+      if(comida_por_preparar==vegano  ){
+    //  printf("comida pedida al empleado vegano\n") ;
+       write(emp_vegano.comida_pedida[1],&nuevo_pedido,sizeof(struct pedido));
+
     }
-    if(comida_por_preparar==papas || comida_por_preparar==papas_VIP){
-      printf("comida pedida al empleado papas\n") ;
-      write(emp_papas.comida_pedida[1],&comida_por_preparar,sizeof(int));
-      write(emp_papas.numeroOrden[1],&nroOrden,sizeof(int));
+    if(comida_por_preparar==papas  ){
+   //   printf("comida pedida al empleado papas\n") ;
+      write(emp_papas.comida_pedida[1],&nuevo_pedido,sizeof(struct pedido));
+
     }
-    if(isVIP==1){
+    isVIP=nuevo_pedido.isVIP;
+    if(isVIP==0){
       write(ok_pedido_VIP[1], PEDIDO_OK, sizeof(PEDIDO_OK));
-        isVIP=0;
     }else {
       write(ok_pedido[1], PEDIDO_OK, sizeof(PEDIDO_OK));
     }
@@ -220,72 +214,68 @@ void empleado_ordenes(){
      */
     nroOrden=-1;
     comida_por_preparar=sin_comida;
-    }else{
-      printf("Ordenes:No me gusta atencion al cliente mejor me voy a dormir\n") ;
-      sleep(5);
-    }
+
+     printf("Ordenes:No me gusta atencion al cliente mejor me voy a dormir\n") ;
+      // sleep(5);
+
   }
 
 }
 
 
 
-void empleado_hamburgesas(){
-  enum comidas cocinar;
-  int numeroEnfila;
+void empleado_hamburgesas() {
+
+  struct pedido nuevo_pedido;
+  int isVIP;
   close(emp_hamburgesas.comida_pedida[1]);
-   close(emp_hamburgesas.numeroOrden[1]);
+
       while (1) {
-        read(emp_hamburgesas.comida_pedida[0],&cocinar,sizeof(int));
-        if(cocinar==hamburgesa || cocinar==hamburgesa_VIP){
-          printf("comenzando a cocinar hamburguesas\n");
-          read(emp_hamburgesas.numeroOrden[0],&numeroEnfila,sizeof(int));
-  
-        if(cocinar==hamburgesa_VIP){
-            write(preparado_clientes_VIP[numeroEnfila].comida_pedida[1],&cocinar,sizeof(int));
-            write(preparado_clientes_VIP[numeroEnfila].numeroOrden[1],&numeroEnfila,sizeof(int));
+        read(emp_hamburgesas.comida_pedida[0],&nuevo_pedido,sizeof(struct pedido));
+
+     //     printf("comenzando a cocinar hamburguesas\n");
+
+  isVIP=nuevo_pedido.isVIP;
+        if(isVIP==0){
+          write(preparado_clientes_VIP.comida_pedida[1], &nuevo_pedido, sizeof(struct pedido));
+
       }else {
-           write(preparado_clientes[numeroEnfila].comida_pedida[1],&cocinar,sizeof(int));
-            write(preparado_clientes[numeroEnfila].numeroOrden[1],&numeroEnfila,sizeof(int));
+        write(preparado_clientes.comida_pedida[1], &nuevo_pedido, sizeof(struct pedido));
+
         }
         
-        printf("Se despacho hamburgesa %d en %d\n",cocinar,numeroEnfila);
-        cocinar=sin_comida;
-        numeroEnfila=-1;
-        sleep(1);
-    }else {
+        printf("Se despacho hamburgesa %d en %d\n",nuevo_pedido.comida,nuevo_pedido.numeroOrden);
+
+        // sleep(1);
+
         printf("Hamburguesas:Esto de laburar en comida rapida es temporal\n");
-        sleep(2);
-    } 
+        // sleep(2);
+
   }
 }
-void empleado_vegano(){
- enum comidas cocinar;
-  int numeroEnfila;
+void empleado_vegano() {
+
+  struct pedido nuevo_pedido;
+  int isVIP;
   close(emp_vegano.comida_pedida[1]);
-   close(emp_vegano.numeroOrden[1]);
 
       while (1) {
-        read(emp_vegano.comida_pedida[0],&cocinar,sizeof(int));
-        if(cocinar==vegano || cocinar==vegano_VIP){
-          printf("comenzando a cocinar vegano\n");
-          read(emp_vegano.numeroOrden[0],&numeroEnfila,sizeof(int));
-           
-        if(cocinar==vegano_VIP){
-            write(preparado_clientes_VIP[numeroEnfila].comida_pedida[1],&cocinar,sizeof(int));
-            write(preparado_clientes_VIP[numeroEnfila].numeroOrden[1],&numeroEnfila,sizeof(int));
-        printf("Se despacho menu vegano VIP %d en %d\n",cocinar,numeroEnfila);
+        read(emp_vegano.comida_pedida[0],&nuevo_pedido,sizeof(struct pedido));
+
+       //   printf("comenzando a cocinar vegano\n");
+isVIP=nuevo_pedido.isVIP;
+        if(isVIP==0){
+            write(preparado_clientes_VIP.comida_pedida[1],&nuevo_pedido,sizeof(struct pedido));
+          printf("Se despacho menu vegano VIP %d en %d\n",nuevo_pedido.comida,nuevo_pedido.numeroOrden);
 
       }else {
-            write(preparado_clientes[numeroEnfila].comida_pedida[1],&cocinar,sizeof(int));
-            write(preparado_clientes[numeroEnfila].numeroOrden[1],&numeroEnfila,sizeof(int));
+            write(preparado_clientes.comida_pedida[1],&nuevo_pedido,sizeof(struct pedido));
         }
-      cocinar=sin_comida;
-      numeroEnfila=-1;
-                sleep(1);
-    }
+
+                // sleep(1);
+
         printf("Vegano:Esto de laburar en comida rapida es temporal\n");
-        sleep(3);
+        // sleep(3);
   }
 
 
@@ -293,30 +283,27 @@ void empleado_vegano(){
 
 
 void empleado_papas(int nro_empleado){
-  enum comidas cocinar;
-  int numeroEnfila;
+
   close(emp_papas.comida_pedida[1]);
-  close(emp_papas.numeroOrden[1]);
+  struct pedido nuevo_pedido;
+  int isVIP=-1;
   while (1) {
-        read(emp_papas.comida_pedida[0],&cocinar,sizeof(int));
-        if(cocinar==papas || cocinar==papas_VIP){
-          printf("comenzando a cocinar papas\n");
-          read(emp_papas.numeroOrden[0],&numeroEnfila,sizeof(int));
-  
-        if(cocinar==papas_VIP){
-            write(preparado_clientes_VIP[numeroEnfila].comida_pedida[1],&cocinar,sizeof(int));
-            write(preparado_clientes_VIP[numeroEnfila].numeroOrden[1],&numeroEnfila,sizeof(int));
-      }else {
-           write(preparado_clientes[numeroEnfila].comida_pedida[1],&cocinar,sizeof(int));
-            write(preparado_clientes[numeroEnfila].numeroOrden[1],&numeroEnfila,sizeof(int));
+        read(emp_papas.comida_pedida[0],&nuevo_pedido,sizeof(struct pedido));
+
+       //   printf("comenzando a cocinar papas\n");
+
+        isVIP=nuevo_pedido.isVIP;
+        if(isVIP==0){
+            write(preparado_clientes_VIP.comida_pedida[1],&nuevo_pedido,sizeof(struct pedido));
+       }else {
+           write(preparado_clientes.comida_pedida[1],&nuevo_pedido,sizeof(struct pedido));
         }
-        printf("Se despacharon papas %d en %d por el empleado %d\n",cocinar,numeroEnfila,nro_empleado);
-        cocinar=sin_comida;
-        numeroEnfila=-1;
-        sleep(1);
-    }
+           printf("Se despacharon papas %d en %d por el empleado %d\n",nuevo_pedido.comida,nuevo_pedido.numeroOrden,nro_empleado);
+        //
+        // sleep(1);
+
         printf("Papas %d:Esto de laburar en comida rapida es temporal\n",nro_empleado);
-        sleep(4);
+        // sleep(4);
      
   }
 }
@@ -333,11 +320,7 @@ void crear_pipes(){
   }
 
 
-   resultados_pipe=pipe(emp_papas.numeroOrden);
-  if(resultados_pipe<0){
-    perror("Error creando pipe");
-    exit(EXIT_FAILURE);
-  }
+
  resultados_pipe=pipe(emp_vegano.comida_pedida);
   if(resultados_pipe<0){
     perror("Error creando pipe");
@@ -345,23 +328,15 @@ void crear_pipes(){
   }
 
 
- resultados_pipe=pipe(emp_vegano.numeroOrden);
-  if(resultados_pipe<0){
-    perror("Error creando pipe");
-    exit(EXIT_FAILURE);
-  }
+
  resultados_pipe=pipe(emp_hamburgesas.comida_pedida);
   if(resultados_pipe<0){
     perror("Error creando pipe");
     exit(EXIT_FAILURE);
   }
 
-  
- resultados_pipe=pipe(emp_hamburgesas.numeroOrden);
-  if(resultados_pipe<0){
-    perror("Error creando pipe");
-    exit(EXIT_FAILURE);
-  }
+
+
 
  resultados_pipe=pipe(cliente_ordenes.comida_pedida);
   if(resultados_pipe<0){
@@ -370,13 +345,7 @@ void crear_pipes(){
   }
 
 if (fcntl(cliente_ordenes.comida_pedida[0], F_SETFL, O_NONBLOCK) < 0)
-        exit(2);
-
-  resultados_pipe=pipe(cliente_ordenes.numeroOrden);
-  if(resultados_pipe<0){
-    perror("Error creando pipe");
-    exit(EXIT_FAILURE);
-  }
+  exit(2);
 
 resultados_pipe=pipe(cliente_ordenes_VIP.comida_pedida);
   if(resultados_pipe<0){
@@ -387,11 +356,7 @@ resultados_pipe=pipe(cliente_ordenes_VIP.comida_pedida);
 if (fcntl(cliente_ordenes_VIP.comida_pedida[0], F_SETFL, O_NONBLOCK) < 0)
         exit(2);
 
- resultados_pipe=pipe(cliente_ordenes_VIP.numeroOrden);
-  if(resultados_pipe<0){
-    perror("Error creando pipe");
-    exit(EXIT_FAILURE);
-  }
+
 
  resultados_pipe=pipe(ok_pedido);
   if(resultados_pipe<0){
@@ -410,38 +375,29 @@ resultados_pipe=pipe(ok_pedido_VIP);
     exit(EXIT_FAILURE);
   }
 
-  for (int i = 0; i < MAXIMO_CLIENTES; i++) {
 
-  resultados_pipe=pipe(preparado_clientes[i].comida_pedida);
+
+  resultados_pipe=pipe(preparado_clientes.comida_pedida);
   if(resultados_pipe<0){
     perror("Error creando pipe");
     exit(EXIT_FAILURE);
   }
 
- resultados_pipe=pipe(preparado_clientes[i].numeroOrden);
+
+
+resultados_pipe=pipe(preparado_clientes_VIP.comida_pedida);
   if(resultados_pipe<0){
     perror("Error creando pipe");
     exit(EXIT_FAILURE);
   }
 
-resultados_pipe=pipe(preparado_clientes_VIP[i].comida_pedida);
-  if(resultados_pipe<0){
-    perror("Error creando pipe");
-    exit(EXIT_FAILURE);
-  }
 
- resultados_pipe=pipe(preparado_clientes_VIP[i].numeroOrden);
-  if(resultados_pipe<0){
-    perror("Error creando pipe");
-    exit(EXIT_FAILURE);
-  }
 
-}
 }
 
 
 void crear_laburantes(){
-   sleep(1);
+   // sleep(1);
     int pid2=fork();
     if(pid2==0){
      printf("empleado hamburguesas creado\n");
@@ -495,31 +451,26 @@ void crear_laburantes(){
 void crear_clientes_esperar(int total_clientes,int clientes_totales[]){
    close(ok_pedido[1]);
     close(cliente_ordenes.comida_pedida[0]);
-    close(cliente_ordenes.numeroOrden[0]);
-    close(hay_pedido[0]);
-    for (int i=0;i<MAXIMO_CLIENTES;i++) {
-      close(preparado_clientes[i].comida_pedida[1]);
-      close(preparado_clientes[i].numeroOrden[1]);
-    }
+  close(hay_pedido[0]);
+
+      close(preparado_clientes.comida_pedida[1]);
+
 
     close(ok_pedido_VIP[1]);
     close(cliente_ordenes_VIP.comida_pedida[0]);
-    close(cliente_ordenes_VIP.numeroOrden[0]);
-    for (int i=0;i<MAXIMO_CLIENTES;i++) {
-      close(preparado_clientes_VIP[i].comida_pedida[1]);
-      close(preparado_clientes_VIP[i].numeroOrden[1]);
-    }
-  for (int i=0;i<total_clientes;i++) {
-          sleep(1);
+
+          close(preparado_clientes_VIP.comida_pedida[1]);
+
+      for (int i=0;i<total_clientes;i++) {
+          // sleep(1);
           clientes_totales[i]=fork();
           if(clientes_totales[i]==0){
-            if ((i%5)==0){
+          if ((i%5)==0){
               printf("Cliente VIP %d creado\n",i);
-              cliente_VIP();
-
+              cliente_VIP(i);
             }else {
               printf("Cliente %d creado\n",i);
-              cliente();
+              cliente(i);
             }
           }else {
             if(clientes_totales[i]<0){
@@ -529,18 +480,19 @@ void crear_clientes_esperar(int total_clientes,int clientes_totales[]){
           }
       }
 
-      for (int i=0;i<total_clientes ;i++ ) {
+      for (int i=0;i<total_clientes;i++ ) {
               wait(&clientes_totales[i]);
+              printf("Cantidad clientes atendidos = %d\n",(i+1));
       }
 
 
 }
 
 void parte_clientes() {
-          int total_clientes = MAXIMO_CLIENTES;
+          int total_clientes = MAXIMO_CLIENTES+15;
           int clientes_totales[total_clientes];
           crear_clientes_esperar(total_clientes, clientes_totales);
-          sleep(2);
+          // sleep(2);
           printf("====================================================Todos los clientes satisfechos============================================================\n");
 }
 
@@ -554,7 +506,7 @@ int pid=fork();
 
     if(pid==0){
       crear_laburantes();
-      sleep(5);
+      // sleep(5);
       exit(0);
     }else {
       if(pid>0){
@@ -563,8 +515,7 @@ int pid=fork();
           turno=sem_open(SEM_TURNO,O_CREAT | O_EXCL,0644,1);
           turnoVIP=sem_open(SEM_TURNO_VIP,O_CREAT | O_EXCL,0644,1);
 
-          fila_Clientes=sem_open(FILA_CLIENTES,O_CREAT | O_EXCL,0644,1);
-          fila_Clientes_VIP =sem_open(FILA_CLIENTES_VIP, O_CREAT | O_EXCL, 0644, 1);
+
 
           parte_clientes();
 
@@ -573,15 +524,11 @@ int pid=fork();
           sem_close(turno);
           sem_close(turnoVIP);
 
-          sem_close(fila_Clientes);
-          sem_close(fila_Clientes_VIP);
 
           sem_unlink(SEM_VACIO);
           sem_unlink(SEM_TURNO);
           sem_unlink(SEM_TURNO_VIP);
 
-          sem_unlink(FILA_CLIENTES);
-          sem_unlink(FILA_CLIENTES_VIP);
 
           wait(&pid);
       } else {
