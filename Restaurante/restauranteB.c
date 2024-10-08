@@ -1,3 +1,4 @@
+
 #include <fcntl.h>
 #include <pthread.h>
 #include <semaphore.h>
@@ -17,8 +18,6 @@
 #define SEM_VACIO "vacio"
 #define SEM_TURNO "turno"
 #define SEM_TURNO_VIP "turno_vip"
-#define FILA_CLIENTES "fila_Clientes"
-#define FILA_CLIENTES_VIP "fila_Clientes_VIP"
 #define CLAVE "clientesEnMicolaNsNs"
 
 #define CODIGO_ORDENES 56
@@ -70,6 +69,7 @@ enum comidas obtener_comida() {
 }
 key_t obtener_clave(char *frase, int id) {
   key_t res = ftok(frase, id);
+  //printf("Se obtuvo clave %d con frase %s e id %d\n",(int) res ,frase , id);
   return res;
 }
 void cliente() {
@@ -92,7 +92,7 @@ void cliente() {
   printf("Deberia dejar de venir a comer aca\n");
    fflush(stdout);
   struct recibido señal;
-
+struct listo pedido_listo;
   while (1) {
 
     if (sem_trywait(vacio) == 0) {
@@ -116,7 +116,7 @@ void cliente() {
       printf("orden pedida de cliente %d y  valor %d\n", myPID,
              miPedido.comida);
       fflush(stdout);
-       sleep(1);
+       // sleep(1);
 
       res = msgrcv(okID, &señal, longitud_recibido, myPID, 0);
 
@@ -126,11 +126,11 @@ void cliente() {
       }
       printf("orden pedida correctamente\n");
       fflush(stdout);
+       sem_post(turno);
 
-      sem_post(turno);
 
-      struct listo pedido_listo;
-      res = msgrcv(listoID, &pedido_listo, longitud_listo, 0, 0);
+
+      res = msgrcv(listoID, &pedido_listo, longitud_listo, myPID, 0);
 
       if (res < 0) {
         perror("Error recibiendo comida");
@@ -140,11 +140,14 @@ void cliente() {
       printf("Cliente:la comida fue recibida, no es rica pero bueno\n");
       msgctl(listoID, IPC_RMID, 0);
       fflush(stdout);
+
       sem_post(vacio);
       break;
     } else {
-       sleep(2);
-      printf("Cliente: Me canse me vuelvo mas tarde\n");
+        sleep(1);
+         int val=0;
+      sem_getvalue(vacio,&val );
+      printf("Cliente: Me canse me vuelvo mas tarde hay en el restaurante %d\n",20-val);
       fflush(stdout);
     }
 
@@ -174,6 +177,7 @@ void cliente_VIP() {
   printf("Soy VIP pero deberia dejar de venir a comer aca\n");
   fflush(stdout);
   struct recibido señal;
+  struct listo pedido_listo;
   while (1) {
     if (sem_trywait(vacio) == 0) {
       printf("Entro VIP al restaurante\n");
@@ -195,7 +199,7 @@ void cliente_VIP() {
       printf("orden VIP pedida de cliente %d y  valor %d\n", myPID,
              miPedido.comida);
       fflush(stdout);
-       sleep(1);
+       // sleep(1);
 
       res = msgrcv(okID, &señal, longitud_recibido, myPID, 0);
 
@@ -206,8 +210,8 @@ void cliente_VIP() {
       printf("orden VIP pedida correctamente\n");
       sem_post(turnoVIP);
 
-      struct listo pedido_listo;
-      res = msgrcv(listoID, &pedido_listo, longitud_listo, 0, 0);
+
+      res = msgrcv(listoID, &pedido_listo, longitud_listo, myPID, 0);
       if (res < 0) {
         perror("Error recibiendo comida");
         exit(EXIT_FAILURE);
@@ -215,12 +219,15 @@ void cliente_VIP() {
 
       printf("VIP:La comida de aca es malisima sin embargo no puedo parar de "
              "venir, lo peor es que me hice VIP\n");
+           msgctl(listoID, IPC_RMID, 0);
       fflush(stdout);
       sem_post(vacio);
       break;
     } else {
-       sleep(2);
-      printf("VIP:Soy vip y tengro prioridad,me canse me vuelvo mas tarde\n");
+       // sleep(2);
+      int val=0;
+      sem_getvalue(vacio,&val );
+      printf("VIP:Soy vip y tengro prioridad,me canse me vuelvo mas tarde hay en el restaurante %d\n",20-val);
       fflush(stdout);
     }
 
@@ -263,10 +270,10 @@ void empleado_ordenes() {
                    IPC_NOWAIT);
     }
 
+    printf("Se leyo de la cola de ordenes %d\n",res);
     if (res > 0) {
       comida_por_preparar = siguiente_pedido.comida;
-      printf("Siguiente pedido es %d al cliente %d\n", comida_por_preparar,
-             siguiente_pedido.nro_pedido);
+      printf("Siguiente pedido es %d al cliente %d\n", comida_por_preparar, siguiente_pedido.nro_pedido);
       fflush(stdout);
 
       siguiente_pedido.type = comida_por_preparar;
@@ -282,16 +289,17 @@ void empleado_ordenes() {
         perror("Fallor al enviar confirmacion");
         exit(EXIT_FAILURE);
       }
+      printf("Se mando confirmacion a %d\n",siguiente_pedido.nro_pedido);
       /*
        * Podria haber esperado por una comfirmaciond del empleado para ver si no
        * lo estoy pasando de ordenes pero bueno creo que ese nivel de
        * verificacion ya es demasiado
        */
-       sleep(3);
+       // sleep(3);
     }
     printf("Ordenes:No me gusta atencion al cliente mejor me voy a dormir\n");
     fflush(stdout);
-     sleep(1);
+     // sleep(1);
   }
 }
 
@@ -336,11 +344,11 @@ void empleado_hamburgesas() {
     printf("Se despacho hamburgesa %d en %d\n", cocinar,
            siguiente_pedido.nro_pedido);
     fflush(stdout);
-     sleep(1);
+     // sleep(1);
 
     printf("Hamburguesas:Esto de laburar en comida rapida es temporal\n");
     fflush(stdout);
-     sleep(2);
+     // sleep(2);
   }
 }
 void empleado_vegano() {
@@ -378,15 +386,16 @@ void empleado_vegano() {
            siguiente_pedido.nro_pedido);
     fflush(stdout);
 
+
     if (res < 0) {
       perror("Error enviando veganos");
       exit(EXIT_FAILURE);
     }
-     sleep(1);
+     // sleep(1);
 
     printf("Vegano:Esto de laburar en comida rapida es temporal\n");
     fflush(stdout);
-     sleep(3);
+     // sleep(3);
   }
 }
 
@@ -429,22 +438,23 @@ void empleado_papas(int nro_empleado) {
       perror("Error enviando papas");
       exit(EXIT_FAILURE);
     }
-     sleep(1);
+     // sleep(1);
+
 
     printf("Se despacharon papas por el empleado %d\n", nro_empleado);
     fflush(stdout);
 
-     sleep(1);
+     // sleep(1);
 
     printf("Papas %d:Esto de laburar en comida rapida es temporal\n",
            nro_empleado);
     fflush(stdout);
-     sleep(4);
+     // sleep(4);
   }
 }
 
 void crear_laburantes() {
-   sleep(1);
+   // sleep(1);
 
   int pid2 = fork();
   if (pid2 == 0) {
@@ -491,7 +501,7 @@ void crear_laburantes() {
 
 void crear_clientes_esperar(int total_clientes, int clientes_totales[]) {
   for (int i = 0; i < total_clientes; i++) {
-     sleep(1);
+     // sleep(1);
     clientes_totales[i] = fork();
     if (clientes_totales[i] == 0) {
       if ((i%5) == 0) {
@@ -513,15 +523,15 @@ void crear_clientes_esperar(int total_clientes, int clientes_totales[]) {
   }
 
   for (int i = 0; i < total_clientes; i++) {
-    wait(NULL);
+    wait(&clientes_totales[i]);
   }
 }
 
 void parte_clientes() {
-  int total_clientes = MAXIMO_CLIENTES;
+  int total_clientes = MAXIMO_CLIENTES+MAXIMO_CLIENTES;
   int clientes_totales[total_clientes];
   crear_clientes_esperar(total_clientes, clientes_totales);
-   sleep(3);
+   // sleep(3);
   printf(
       "====================================================Todos los clientes "
       "satisfechos============================================================"
@@ -538,6 +548,17 @@ int main() {
   idEmpleados =
       msgget(obtener_clave(CLAVE, CODIGO_EMPLEADOS), IPC_CREAT | 0666);
 
+  msgctl(idEmpleados, IPC_RMID, 0);
+  msgctl(idOk, IPC_RMID, 0);
+  msgctl(idOrdenes, IPC_RMID, 0);
+
+
+   idOrdenes = msgget(obtener_clave(CLAVE, CODIGO_ORDENES), 0666 | IPC_CREAT);
+  idOk = msgget(obtener_clave(CLAVE, CODIGO_OK), 0666 | IPC_CREAT);
+  idEmpleados =
+      msgget(obtener_clave(CLAVE, CODIGO_EMPLEADOS), IPC_CREAT | 0666);
+
+
   if (idEmpleados < 0 || idOk < 0 || idOrdenes < 0) {
     printf("Error creando colas de mensajes %d id Empleados, %d idOk, %d "
            "idOrdenes\n",
@@ -549,7 +570,7 @@ int main() {
 
   if (pid == 0) {
     crear_laburantes();
-     sleep(5);
+     // sleep(5);
     exit(0);
   } else {
     if (pid > 0) {
@@ -575,11 +596,6 @@ int main() {
     }
   }
 
-  msgctl(idEmpleados, IPC_RMID, 0);
-
-  msgctl(idOk, IPC_RMID, 0);
-
-  msgctl(idOrdenes, IPC_RMID, 0);
 
 
   return EXIT_SUCCESS;

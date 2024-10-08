@@ -1,6 +1,5 @@
 #include <stdlib.h>
 #include <sys/wait.h>
-#include <time.h>
 #include <unistd.h>
 #include <wait.h>
 #include <semaphore.h>
@@ -89,8 +88,8 @@ struct pedido miComidaLista;
      printf("Deje mi espacio en el restaurante soy el %d\n",nro_creado);
     exit(0);
   } else {
-        // sleep(2);
-   //     printf("Cliente: Me canse me vuelvo mas tarde\n");
+         sleep(2);
+        printf("Cliente: Me canse me vuelvo mas tarde\n");
      }
   }
 
