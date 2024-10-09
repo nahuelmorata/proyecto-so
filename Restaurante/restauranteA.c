@@ -11,21 +11,18 @@
 
 
 #define MAXIMO_CLIENTES 10
-#define  PEDIDO_OK "OK"
-#define SEM_VACIO "vacio"
-#define SEM_TURNO "turno"
-#define SEM_TURNO_VIP "turno_vip"
+#define PEDIDO_OK "OK"
 
 
+enum comidas { sin_comida = -1, hamburgesa = 1, vegano = 2, papas = 3 };
 
-enum comidas{sin_comida=-1,hamburgesa=1,vegano=2,papas=3};
-sem_t *vacio;
-sem_t *turno;
-sem_t *turnoVIP;
 
 int ok_pedido[2];
 int ok_pedido_VIP[2];
 int hay_pedido[2];
+int turno[2];
+int turnoVIP[2];
+int max_gente[2];
 
 struct comunicacion_empleados {
     int comida_pedida[2];
@@ -61,15 +58,16 @@ void cliente(int nro_creado) {
  miOrden.numeroOrden = myPID;
  miOrden.isVIP = -1;
 
-
+int mi_turno,cant;
 struct pedido miComidaLista;
   printf("Deberia dejar de venir a comer aca\n");
      char *ok="";
   while (1) {
-    if (sem_trywait(vacio)==0) {
+   if( read(max_gente[0],&cant ,sizeof(int))>0){
         printf("Entre al restaurante soy el %d\n",nro_creado);
 
-        sem_wait(turno);
+        read(turno[0],&mi_turno ,sizeof(int));
+
         //   printf("Valor cliente es %d\n",myPID);
            write(cliente_ordenes.comida_pedida[1],&miOrden,sizeof(struct pedido));
 
@@ -82,15 +80,15 @@ struct pedido miComidaLista;
           read(preparado_clientes.comida_pedida[0],&miComidaLista,sizeof(struct pedido));
 
           printf("Cliente:la comida fue recibida, no es rica pero bueno\n");
-        sem_post(turno);
+        write(turno[1],&mi_turno ,sizeof(int));
 
-     sem_post(vacio);
+   write(max_gente[1],&cant,sizeof(int));
      printf("Deje mi espacio en el restaurante soy el %d\n",nro_creado);
-    exit(0);
-  } else {
-         sleep(2);
-        printf("Cliente: Me canse me vuelvo mas tarde\n");
-     }
+   exit(0);
+   }else {
+      printf("el restaurante esta lleno vuelvo mas tarde\n");
+      usleep(100);
+    }
   }
 
 }
@@ -114,15 +112,16 @@ void cliente_VIP(int nro_creado){
 
 
 
+int mi_turno,cant;
 
 struct pedido miComidaLista;
   printf("Soy VIP pero deberia dejar de venir a comer aca\n");
     char *ok="";
   while (1) {
-     if (sem_trywait(vacio)==0) {
+    if(read(max_gente[0],&cant ,sizeof(int)) >0){
           printf("Entre al restaurante soy el vip %d\n",nro_creado);
 
-        sem_wait(turnoVIP);
+        read(turnoVIP[0],&mi_turno ,sizeof(int));
          write(cliente_ordenes_VIP.comida_pedida[1], &miOrden, sizeof(struct pedido));
 
           write(hay_pedido[1],&señal_pedido ,sizeof(int) );
@@ -137,14 +136,16 @@ struct pedido miComidaLista;
 
        read(preparado_clientes_VIP.comida_pedida[0],&miComidaLista,sizeof(struct pedido));
           printf("VIP:La comida de aca es malisima sin embargo no puedo parar de venir, lo peor es que me hice VIP\n");
-        sem_post(turnoVIP);
- printf("Deje mi espacio en el restaurante soy el %d\n",nro_creado);
-     sem_post(vacio);
-     exit(0);
-  } else {
-         sleep(2);
-        printf("VIP:Soy vip y tengro prioridad,me canse me vuelvo mas tarde\n");
-     }
+         write(turnoVIP[1],&mi_turno ,sizeof(int));
+   printf("Deje mi espacio en el restaurante soy el %d\n",nro_creado);
+   write(max_gente[1],&cant,sizeof(int));
+   exit(0);
+
+    }else {
+    printf("Soy vip pero el restaurante esta lleno vuelvo mas tarde\n");
+      usleep(100);
+  }
+
   }
 
 
@@ -312,6 +313,26 @@ void crear_pipes(){
 
   int resultados_pipe;
 
+  resultados_pipe=pipe(turno);
+  if(resultados_pipe<0){
+    perror("Error creando pipe");
+    exit(EXIT_FAILURE);
+  }
+
+  resultados_pipe=pipe(turnoVIP);
+  if(resultados_pipe<0){
+    perror("Error creando pipe");
+    exit(EXIT_FAILURE);
+  }
+
+  resultados_pipe=pipe(max_gente);
+  if(resultados_pipe<0){
+    perror("Error creando pipe");
+    exit(EXIT_FAILURE);
+  }
+  if (fcntl(max_gente[0], F_SETFL, O_NONBLOCK) < 0)
+        exit(2);
+
   resultados_pipe=pipe(emp_papas.comida_pedida);
   if(resultados_pipe<0){
     perror("Error creando pipe");
@@ -396,6 +417,12 @@ resultados_pipe=pipe(preparado_clientes_VIP.comida_pedida);
 
 
 void crear_laburantes(){
+  close(turno[0]);
+  close(turno[1]);
+  close(turnoVIP[0]);
+  close(turnoVIP[1]);
+  close(max_gente[0]);
+  close(max_gente[1]);
    // sleep(1);
     int pid2=fork();
     if(pid2==0){
@@ -460,6 +487,13 @@ void crear_clientes_esperar(int total_clientes,int clientes_totales[]){
 
           close(preparado_clientes_VIP.comida_pedida[1]);
 
+          int inicio_gente=10;
+            for (int i=0;i<MAXIMO_CLIENTES ;i++ ) {
+                write(max_gente[1],&inicio_gente , sizeof(int));
+          }
+          write(turno[1],&inicio_gente ,sizeof(int) );
+          write(turnoVIP[1],&inicio_gente ,sizeof(int) );
+
       for (int i=0;i<total_clientes;i++) {
           // sleep(1);
           clientes_totales[i]=fork();
@@ -479,19 +513,20 @@ void crear_clientes_esperar(int total_clientes,int clientes_totales[]){
           }
       }
 
-      for (int i=0;i<total_clientes;i++ ) {
-              wait(&clientes_totales[i]);
-              printf("Cantidad clientes atendidos = %d\n",(i+1));
-      }
+
 
 
 }
 
 void parte_clientes() {
-          int total_clientes = MAXIMO_CLIENTES+15;
+          int total_clientes = MAXIMO_CLIENTES*MAXIMO_CLIENTES;
           int clientes_totales[total_clientes];
           crear_clientes_esperar(total_clientes, clientes_totales);
           // sleep(2);
+           for (int i=0;i<total_clientes;i++ ) {
+              wait(&clientes_totales[i]);
+              printf("Cantidad clientes atendidos = %d\n",(i+1));
+            }
           printf("====================================================Todos los clientes satisfechos============================================================\n");
 }
 
@@ -508,25 +543,10 @@ int pid=fork();
       // sleep(5);
       exit(0);
     }else {
-      if(pid>0){
-          vacio= sem_open(SEM_VACIO,O_CREAT | O_EXCL,0644,MAXIMO_CLIENTES);
-
-          turno=sem_open(SEM_TURNO,O_CREAT | O_EXCL,0644,1);
-          turnoVIP=sem_open(SEM_TURNO_VIP,O_CREAT | O_EXCL,0644,1);
-
+      if (pid > 0) {
 
 
           parte_clientes();
-
-          sem_close(vacio);
-
-          sem_close(turno);
-          sem_close(turnoVIP);
-
-
-          sem_unlink(SEM_VACIO);
-          sem_unlink(SEM_TURNO);
-          sem_unlink(SEM_TURNO_VIP);
 
 
           wait(&pid);

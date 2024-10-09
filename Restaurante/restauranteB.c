@@ -1,4 +1,3 @@
-
 #include <fcntl.h>
 #include <pthread.h>
 #include <semaphore.h>
@@ -15,9 +14,7 @@
 
 #define MAXIMO_CLIENTES 10
 #define PEDIDO_OK "OK"
-#define SEM_VACIO "vacio"
-#define SEM_TURNO "turno"
-#define SEM_TURNO_VIP "turno_vip"
+
 #define CLAVE "clientesEnMicolaNsNs"
 
 #define CODIGO_ORDENES 56
@@ -26,11 +23,8 @@
 #define CODIGO_LISTO 34
 
 enum comidas { hamburgesa = 1, vegano = 2, papas = 3 };
-enum tipo_pedido { normal = 1, vip = 2, señal_pedido = 3 };
+enum tipo_pedido { normal = 1, vip = 2, señal_pedido = 3,max_gente=4, turno=5,turnoVIP=6};
 
-sem_t *vacio;
-sem_t *turno;
-sem_t *turnoVIP;
 
 struct pedido {
   long type;
@@ -96,11 +90,11 @@ void cliente() {
 struct listo pedido_listo;
   while (1) {
 
-    if (sem_trywait(vacio) == 0) {
+    if (msgrcv(okID,&señal ,longitud_recibido ,max_gente ,IPC_NOWAIT)>=0) {
 
       printf("Entre al restaurante\n");
       fflush(stdout);
-      sem_wait(turno);
+      msgrcv(okID,&señal , longitud_recibido,turno ,0 );
 
       int res = msgsnd(ordenesID, &miPedido, longitud_pedido, 0);
       if (res < 0) {
@@ -127,8 +121,13 @@ struct listo pedido_listo;
       }
       printf("orden pedida correctamente\n");
       fflush(stdout);
-       sem_post(turno);
+      señal.type=turno;
 
+      res= msgsnd(okID,&señal , longitud_recibido,0 );
+       if (res < 0) {
+        perror("Error dejando turno");
+        exit(EXIT_FAILURE);
+      }
 
 
       res = msgrcv(listoID, &pedido_listo, longitud_listo, myPID, 0);
@@ -142,14 +141,17 @@ struct listo pedido_listo;
 
       fflush(stdout);
 
-      sem_post(vacio);
+      señal.type=max_gente;
+     res= msgsnd(okID,&señal , longitud_recibido,0 );
+      if (res < 0) {
+        perror("Error dejando restaurante");
+        exit(EXIT_FAILURE);
+      }
       break;
     } else {
-        sleep(1);
-         int val=0;
-      sem_getvalue(vacio,&val );
-      printf("Cliente: Me canse me vuelvo mas tarde hay en el restaurante %d\n",20-val);
+      printf("Cliente: Me canse me vuelvo mas tarde al restaurante\n");
       fflush(stdout);
+      usleep(100);
     }
 
   }
@@ -180,10 +182,10 @@ void cliente_VIP() {
   struct recibido señal;
   struct listo pedido_listo;
   while (1) {
-    if (sem_trywait(vacio) == 0) {
+    if (msgrcv(okID,&señal ,longitud_recibido ,max_gente ,IPC_NOWAIT )>=0) {
       printf("Entro VIP al restaurante\n");
       fflush(stdout);
-      sem_wait(turnoVIP);
+      msgrcv(okID,&señal , longitud_recibido,turnoVIP ,0 );
 
       int res = msgsnd(ordenesID, &miPedido, longitud_pedido, 0);
       if (res < 0) {
@@ -209,7 +211,12 @@ void cliente_VIP() {
         exit(EXIT_FAILURE);
       }
       printf("orden VIP pedida correctamente\n");
-      sem_post(turnoVIP);
+      señal.type=turnoVIP;
+      res= msgsnd(okID,&señal , longitud_recibido,0 );
+      if (res < 0) {
+        perror("Error dejando turno");
+        exit(EXIT_FAILURE);
+      }
 
 
       res = msgrcv(listoID, &pedido_listo, longitud_listo, myPID, 0);
@@ -222,14 +229,18 @@ void cliente_VIP() {
              "venir, lo peor es que me hice VIP\n");
 
       fflush(stdout);
-      sem_post(vacio);
+      señal.type=max_gente;
+     res= msgsnd(okID,&señal , longitud_recibido,0 );
+        if (res < 0) {
+        perror("Error dejando restaurante");
+        exit(EXIT_FAILURE);
+      }
       break;
     } else {
-        sleep(2);
-      int val=0;
-      sem_getvalue(vacio,&val );
-      printf("VIP:Soy vip y tengro prioridad,me canse me vuelvo mas tarde hay en el restaurante %d\n",20-val);
+
+      printf("VIP:Soy vip y tengro prioridad,me canse me vuelvo mas tarde hay en el restaurante \n");
       fflush(stdout);
+      usleep(100);
     }
 
   }
@@ -508,7 +519,7 @@ void crear_clientes_esperar(int total_clientes, int clientes_totales[]) {
      // sleep(1);
     clientes_totales[i] = fork();
     if (clientes_totales[i] == 0) {
-      if ((i%5) == 0) {
+      if ((i%5)== 0) {
         printf("Cliente VIP %d creado\n", i);
         fflush(stdout);
         cliente_VIP();
@@ -526,9 +537,7 @@ void crear_clientes_esperar(int total_clientes, int clientes_totales[]) {
     }
   }
 
-  for (int i = 0; i < total_clientes; i++) {
-    wait(&clientes_totales[i]);
-  }
+
 }
 
 void parte_clientes() {
@@ -536,6 +545,9 @@ void parte_clientes() {
   int clientes_totales[total_clientes];
   crear_clientes_esperar(total_clientes, clientes_totales);
    // sleep(3);
+    for (int i = 0; i < total_clientes; i++) {
+    wait(&clientes_totales[i]);
+  }
   printf(
       "====================================================Todos los clientes "
       "satisfechos============================================================"
@@ -551,8 +563,7 @@ int main() {
   idOk = msgget(obtener_clave(CLAVE, CODIGO_OK), 0666 | IPC_CREAT);
   idEmpleados =
       msgget(obtener_clave(CLAVE, CODIGO_EMPLEADOS), IPC_CREAT | 0666);
-
-       idListo =
+  idListo =
       msgget(obtener_clave(CLAVE, CODIGO_LISTO), IPC_CREAT | 0666);
 
   msgctl(idEmpleados, IPC_RMID, 0);
@@ -567,6 +578,16 @@ int main() {
       msgget(obtener_clave(CLAVE, CODIGO_EMPLEADOS), IPC_CREAT | 0666);
   idListo = msgget(obtener_clave(CLAVE, CODIGO_LISTO), IPC_CREAT | 0666);
 
+  struct recibido init;
+  init.type=max_gente;
+  for (int i=0;i< MAXIMO_CLIENTES; i++) {
+    msgsnd(idOk,&init ,longitud_recibido ,0 );
+  }
+
+  init.type=turno;
+  msgsnd(idOk,&init ,longitud_recibido ,0 );
+  init.type=turnoVIP;
+  msgsnd(idOk,&init ,longitud_recibido ,0 );
 
   if (idEmpleados < 0 || idOk < 0 || idOrdenes < 0) {
     printf("Error creando colas de mensajes %d id Empleados, %d idOk, %d "
@@ -583,21 +604,9 @@ int main() {
     exit(0);
   } else {
     if (pid > 0) {
-      vacio = sem_open(SEM_VACIO, O_CREAT | O_EXCL, 0644, MAXIMO_CLIENTES);
-      turno = sem_open(SEM_TURNO, O_CREAT | O_EXCL, 0644, 1);
-      turnoVIP = sem_open(SEM_TURNO_VIP, O_CREAT | O_EXCL, 0644, 1);
+
 
       parte_clientes();
-
-      sem_close(vacio);
-
-      sem_close(turno);
-      sem_close(turnoVIP);
-
-      sem_unlink(SEM_VACIO);
-      sem_unlink(SEM_TURNO);
-      sem_unlink(SEM_TURNO_VIP);
-
        wait(&pid);
     } else {
       perror("Error creando clientes\n");
