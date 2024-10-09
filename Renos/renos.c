@@ -6,12 +6,12 @@
 #define NUMERO_RENOS 9
 #define NUMERO_ELFOS 3
 
-sem_t cant_renos;
-sem_t cant_elfos;
+
 
 int santa_seguir;
 pthread_mutex_t mutex=PTHREAD_MUTEX_INITIALIZER;
-
+sem_t cant_renos;
+sem_t cant_elfos;
 sem_t reno_espera,reno_resuelto;
 sem_t elfo_espera,elfo_resuelto;
 sem_t santa_resuelto;
