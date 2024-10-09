@@ -23,6 +23,7 @@
 #define CODIGO_ORDENES 56
 #define CODIGO_OK 10
 #define CODIGO_EMPLEADOS 43
+#define CODIGO_LISTO 34
 
 enum comidas { hamburgesa = 1, vegano = 2, papas = 3 };
 enum tipo_pedido { normal = 1, vip = 2, señal_pedido = 3 };
@@ -76,7 +77,7 @@ void cliente() {
   int ordenesID = msgget(obtener_clave(CLAVE, CODIGO_ORDENES), 0666);
   int okID = msgget(obtener_clave(CLAVE, CODIGO_OK), 0666);
   int myPID = getpid();
-  int listoID = msgget(obtener_clave(CLAVE, myPID), IPC_CREAT | 0666);
+  int listoID = msgget(obtener_clave(CLAVE, CODIGO_LISTO), 0666);
 
   if (ordenesID < 0 || okID < 0 || listoID < 0) {
     printf("Error creando cola listo de cliente %d", myPID);
@@ -138,7 +139,7 @@ struct listo pedido_listo;
       }
 
       printf("Cliente:la comida fue recibida, no es rica pero bueno\n");
-      msgctl(listoID, IPC_RMID, 0);
+
       fflush(stdout);
 
       sem_post(vacio);
@@ -161,7 +162,7 @@ void cliente_VIP() {
   int ordenesID = msgget(obtener_clave(CLAVE, CODIGO_ORDENES), 0666);
   int okID = msgget(obtener_clave(CLAVE, CODIGO_OK), 0666);
   int myPID = getpid();
-  int listoID = msgget(obtener_clave(CLAVE, myPID), IPC_CREAT | 0666);
+  int listoID = msgget(obtener_clave(CLAVE, CODIGO_LISTO), 0666);
 
   if (ordenesID < 0 || okID < 0 || listoID < 0) {
     printf("Error creando cola listo vip de cliente %d", myPID);
@@ -219,12 +220,12 @@ void cliente_VIP() {
 
       printf("VIP:La comida de aca es malisima sin embargo no puedo parar de "
              "venir, lo peor es que me hice VIP\n");
-           msgctl(listoID, IPC_RMID, 0);
+
       fflush(stdout);
       sem_post(vacio);
       break;
     } else {
-       // sleep(2);
+        sleep(2);
       int val=0;
       sem_getvalue(vacio,&val );
       printf("VIP:Soy vip y tengro prioridad,me canse me vuelvo mas tarde hay en el restaurante %d\n",20-val);
@@ -311,6 +312,9 @@ void empleado_hamburgesas() {
   }
   enum comidas cocinar = hamburgesa;
   struct pedido siguiente_pedido;
+
+    int idListo =
+        msgget(obtener_clave(CLAVE, CODIGO_LISTO), 0666);
   while (1) {
 
     int res =
@@ -329,8 +333,6 @@ void empleado_hamburgesas() {
     pedido_cocinado.comida_preparada = hamburgesa;
     pedido_cocinado.type = siguiente_pedido.nro_pedido;
 
-    int idListo =
-        msgget(obtener_clave(CLAVE, siguiente_pedido.nro_pedido), 0666);
     if (idListo < 0) {
       perror("Error obteniendo cola del siguiente pedido ");
     }
@@ -358,6 +360,8 @@ void empleado_vegano() {
   if (idEmpleado < 0) {
     perror("Error obteniendo cola de empleado vegano");
   }
+   int idListo =
+        msgget(obtener_clave(CLAVE, CODIGO_LISTO), 0666);
   enum comidas cocinar = vegano;
   while (1) {
 
@@ -369,8 +373,7 @@ void empleado_vegano() {
       perror("Error obteniendo vegano");
       exit(EXIT_FAILURE);
     }
-    int idListo =
-        msgget(obtener_clave(CLAVE, siguiente_pedido.nro_pedido), 0666);
+
     printf("comenzando a cocinar vegano\n");
     fflush(stdout);
     if (idListo < 0) {
@@ -407,6 +410,9 @@ void empleado_papas(int nro_empleado) {
     perror("Error obteniendo cola de empleado papas");
   }
   enum comidas cocinar = papas;
+
+    int idListo =
+        msgget(obtener_clave(CLAVE, CODIGO_LISTO), 0666);
   struct pedido siguiente_pedido;
   while (1) {
     int res =
@@ -417,8 +423,6 @@ void empleado_papas(int nro_empleado) {
       exit(EXIT_FAILURE);
     }
 
-    int idListo =
-        msgget(obtener_clave(CLAVE, siguiente_pedido.nro_pedido), 0666);
     printf("comenzando a cocinar papas\n");
     fflush(stdout);
     if (idListo < 0) {
@@ -528,7 +532,7 @@ void crear_clientes_esperar(int total_clientes, int clientes_totales[]) {
 }
 
 void parte_clientes() {
-  int total_clientes = MAXIMO_CLIENTES+MAXIMO_CLIENTES;
+  int total_clientes = MAXIMO_CLIENTES*MAXIMO_CLIENTES;
   int clientes_totales[total_clientes];
   crear_clientes_esperar(total_clientes, clientes_totales);
    // sleep(3);
@@ -540,7 +544,7 @@ void parte_clientes() {
 
 int main() {
 
-  int idOrdenes, idOk, idEmpleados;
+  int idOrdenes, idOk, idEmpleados,idListo;
   printf("\n=============Abriendo Pumper Nic=================\n");
   fflush(stdout);
   idOrdenes = msgget(obtener_clave(CLAVE, CODIGO_ORDENES), 0666 | IPC_CREAT);
@@ -548,15 +552,20 @@ int main() {
   idEmpleados =
       msgget(obtener_clave(CLAVE, CODIGO_EMPLEADOS), IPC_CREAT | 0666);
 
+       idListo =
+      msgget(obtener_clave(CLAVE, CODIGO_LISTO), IPC_CREAT | 0666);
+
   msgctl(idEmpleados, IPC_RMID, 0);
   msgctl(idOk, IPC_RMID, 0);
   msgctl(idOrdenes, IPC_RMID, 0);
+  msgctl(idListo, IPC_RMID, 0);
 
 
    idOrdenes = msgget(obtener_clave(CLAVE, CODIGO_ORDENES), 0666 | IPC_CREAT);
   idOk = msgget(obtener_clave(CLAVE, CODIGO_OK), 0666 | IPC_CREAT);
   idEmpleados =
       msgget(obtener_clave(CLAVE, CODIGO_EMPLEADOS), IPC_CREAT | 0666);
+  idListo = msgget(obtener_clave(CLAVE, CODIGO_LISTO), IPC_CREAT | 0666);
 
 
   if (idEmpleados < 0 || idOk < 0 || idOrdenes < 0) {
@@ -596,7 +605,9 @@ int main() {
     }
   }
 
-
-
+msgctl(idEmpleados, IPC_RMID, 0);
+  msgctl(idOk, IPC_RMID, 0);
+  msgctl(idOrdenes, IPC_RMID, 0);
+  msgctl(idListo, IPC_RMID, 0);
   return EXIT_SUCCESS;
 }
