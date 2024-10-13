@@ -141,10 +141,9 @@ int main() {
     siguienteComando();
     fgets(salida,100,stdin);
     fflush(stdin);
-
     strtok(salida,"\n");
-    salir= strcmp(salida,"exit");
-    
+
+    salir = strcmp(salida, "exit");
     if(salir==0){
       uid_t uid = getuid();
       struct passwd *pw = getpwuid(uid);
