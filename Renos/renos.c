@@ -23,40 +23,41 @@ void *santa(void *args){
   args=NULL;
   free(args);
   while(santa_seguir) {
-  
-  for (int i=0;i<NUMERO_RENOS;i++) {
-    sem_wait(&reno_espera);
-  }
-    sleep(1);
 
-  for (int i=0;i<NUMERO_ELFOS;i++) {
-    sem_wait(&elfo_espera);
-  }
-  sleep(1);
-
-  for (int i=0;i<NUMERO_RENOS;i++) {
-   sem_post(&santa_atiende_reno);
-    printf("Atando reno\n");
-    sem_wait(&reno_resuelto);
-   sem_post(&santa_resuelto); // Segundo rendezvous para no atender a un reno sin terminar a otro
+    for (int i=0;i<NUMERO_RENOS;i++) {
+      sem_wait(&reno_espera);
+    }
     sleep(1);
-
-  }
-    sleep(1);
-    printf("Todos los renos atados\n");
-    sem_post(&cant_renos);
 
     for (int i=0;i<NUMERO_ELFOS;i++) {
-   sem_post(&santa_atiende_elfo);
-    printf("Elfo siendo atendido\n");
-   sem_wait(&elfo_resuelto);
-   sem_post(&santa_resuelto);
+      sem_wait(&elfo_espera);
+    }
     sleep(1);
-  }
+    sem_wait(&cant_renos);
+    for (int i=0;i<NUMERO_RENOS;i++) {
+      sem_post(&santa_atiende_reno);
+      printf("Atando reno\n");
+      sem_wait(&reno_resuelto);
+      sem_post(&santa_resuelto); // Segundo rendezvous para no atender a un reno sin terminar a otro
+      sleep(1);
+
+    }
+    sleep(1);
+    printf("Todos los renos atados\n");
+
+
+     sem_wait(&cant_elfos);
+    for (int i=0;i<NUMERO_ELFOS;i++) {
+      sem_post(&santa_atiende_elfo);
+      printf("Elfo siendo atendido\n");
+      sem_wait(&elfo_resuelto);
+      sem_post(&santa_resuelto);
+      sleep(1);
+    }
     sleep(1);
     printf("Todos los elfos atendidos\n");
-    sem_post(&cant_elfos);
-   printf("======Renos atados y elfos atendidos=====\n");
+
+    printf("======Renos atados y elfos atendidos=====\n");
     sleep(5);
   }
 
@@ -69,24 +70,27 @@ void *renos(void *args)
 
   sem_wait(&renos_trineo);
   pthread_mutex_lock(&mutex);
-      sem_post(&cant_renos);
+  sem_post(&cant_renos);
   pthread_mutex_unlock(&mutex);
 
   sem_post(&reno_espera);
   sem_wait(&santa_atiende_reno); //primer rendezvous para que santa atienda un reno
-    printf("Santa atando\n");
-  sem_post(&reno_resuelto);
+  printf("Santa atando\n");
+
+  sem_post(&reno_resuelto); //segundo rendezvous para que que solo se pueda salir de un reno a la vez
   sem_wait(&santa_resuelto);
 
+  //El ultimo reno permiete que entren los proximos 9 renos
   pthread_mutex_lock(&mutex);
 
-    if(sem_trywait(&cant_renos)){
-      for (int i=0;i<NUMERO_RENOS;i++) {
-        sem_post(&renos_trineo);
-      }
+  if(sem_trywait(&cant_renos)!=0){
+    printf("permitiendo entrada a otros renos\n");
+    for (int i = 0; i < NUMERO_RENOS; i++) {
+      sem_post(&renos_trineo);
     }
+  }
   pthread_mutex_unlock(&mutex);
-    sleep(1);
+  sleep(1);
   printf("Fui atado\n");
   pthread_exit(NULL);
 }
@@ -96,25 +100,30 @@ void *elfos(void *args)
   args=NULL;
   free(args);
   sem_wait(&elfos_problema);
-  pthread_mutex_lock(&mutex);
-    sem_post(&cant_elfos);
+
+   pthread_mutex_lock(&mutex);
+   sem_post(&cant_elfos);
+
   pthread_mutex_unlock(&mutex);
+
   sem_post(&elfo_espera);
   sem_wait(&santa_atiende_elfo);
-    printf("Santa resolviendo problema\n");
+
+  printf("Santa resolviendo problema\n");
+
   sem_post(&elfo_resuelto);
   sem_wait(&santa_resuelto);
+
   pthread_mutex_lock(&mutex);
-
-    if(sem_trywait(&cant_elfos)){
-      for (int i=0;i<NUMERO_ELFOS;i++) {
-         sem_post(&elfos_problema);
-      }
+  if(sem_trywait(&cant_elfos)!=0){
+    printf("permitiendo entrada a otros elfos\n");
+    for (int i = 0; i < NUMERO_ELFOS; i++) {
+    sem_post(&elfos_problema);
     }
-
+  }
   pthread_mutex_unlock(&mutex);
 
-    sleep(1);
+  sleep(1);
   printf("Problema resuelto\n");
   pthread_exit(NULL);
 }
@@ -122,11 +131,11 @@ void *elfos(void *args)
 
 int main() {
 
-   
+
   //El numero de elfos debe ser multiplo de NUMERO_ELFOS 
   // El numero de renos debe ser multiplo de NUMERO_RENOS, similar a los elfos
-  int total_renos=NUMERO_RENOS;
-  int total_elfos=NUMERO_ELFOS;
+  int total_renos=NUMERO_RENOS*2;
+  int total_elfos=NUMERO_ELFOS*2;
   pthread_t santaT;
   pthread_t renosT[total_renos];
   pthread_t elfosT[total_elfos];
@@ -148,7 +157,7 @@ int main() {
     perror("Error, programa imposible de completar, numero de renos erroneo");
     exit(EXIT_FAILURE);
   }
-   if((total_elfos%NUMERO_ELFOS)!=0){
+  if((total_elfos%NUMERO_ELFOS)!=0){
     perror("Error, programa imposible de completar, numero de elfos erroneo");
     exit(EXIT_FAILURE);
   } 
@@ -165,9 +174,11 @@ int main() {
     pthread_join(renosT[i],NULL);
   }
 
+  printf("Todos los renos terminados\n");
   for (int i=0;i<total_elfos;i++) {
     pthread_join(elfosT[i],NULL);
   }
+  printf("Todos los elfos terminados\n");
   santa_seguir=0;
   pthread_join(santaT,NULL);
   return EXIT_SUCCESS;

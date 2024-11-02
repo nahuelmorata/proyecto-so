@@ -8,7 +8,6 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
-#include <time.h>
 #include <unistd.h>
 #include <wait.h>
 
@@ -68,6 +67,7 @@ key_t obtener_clave(char *frase, int id) {
   return res;
 }
 void cliente() {
+  int enojoEspera=0;
   int ordenesID = msgget(obtener_clave(CLAVE, CODIGO_ORDENES), 0666);
   int okID = msgget(obtener_clave(CLAVE, CODIGO_OK), 0666);
   int myPID = getpid();
@@ -152,6 +152,9 @@ struct listo pedido_listo;
       printf("Cliente: Me canse me vuelvo mas tarde al restaurante\n");
       fflush(stdout);
       usleep(100);
+      enojoEspera++;
+      if(enojoEspera==100)
+        break;
     }
 
   }
@@ -161,6 +164,7 @@ struct listo pedido_listo;
 }
 
 void cliente_VIP() {
+   int enojoEspera=0;
   int ordenesID = msgget(obtener_clave(CLAVE, CODIGO_ORDENES), 0666);
   int okID = msgget(obtener_clave(CLAVE, CODIGO_OK), 0666);
   int myPID = getpid();
@@ -241,6 +245,9 @@ void cliente_VIP() {
       printf("VIP:Soy vip y tengro prioridad,me canse me vuelvo mas tarde hay en el restaurante \n");
       fflush(stdout);
       usleep(100);
+      enojoEspera++;
+      if(enojoEspera==100)
+        break;
     }
 
   }
